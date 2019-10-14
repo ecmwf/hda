@@ -1,5 +1,5 @@
 To run the demo, first make sure the file `$HOME/.hdarc` exists with
-the URL to the API end point and your user annd password:
+the URL to the API end point and your user and password:
 
 ```yaml
 url: https://api.wekeo.eu/v1/databroker
