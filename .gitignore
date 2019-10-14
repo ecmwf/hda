@@ -3,3 +3,4 @@ __pycache__/
 S3A*
 *.grib
 *.zip
+issues/
