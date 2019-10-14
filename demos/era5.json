@@ -1,0 +1,43 @@
+{
+    "datasetId": "EO:ECMWF:DAT:ERA5_HOURLY_VARIABLES_ON_PRESSURE_LEVELS",
+    "stringChoiceValues": [{
+        "name": "format",
+        "value": "grib"
+    }],
+    "multiStringSelectValues": [{
+        "name": "variable",
+        "value": [
+            "temperature"
+        ]
+    }, {
+        "name": "pressure_level",
+        "value": [
+            "500"
+        ]
+    }, {
+        "name": "product_type",
+        "value": [
+            "ensemble_mean"
+        ]
+    }, {
+        "name": "year",
+        "value": [
+            "2014"
+        ]
+    }, {
+        "name": "month",
+        "value": [
+            "11"
+        ]
+    }, {
+        "name": "day",
+        "value": [
+            "10"
+        ]
+    }, {
+        "name": "time",
+        "value": [
+            "12:00"
+        ]
+    }]
+}
