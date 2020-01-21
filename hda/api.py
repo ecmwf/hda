@@ -24,6 +24,8 @@ import time
 import logging
 import os
 from tqdm import tqdm
+from urllib.parse import urlparse
+from ftplib import FTP
 
 
 def bytes_to_string(n):
@@ -51,6 +53,53 @@ def shorten(r, length=80):
     if len(txt) > length:
         return txt[:length - 3] + "..."
     return txt
+
+
+class FTPRequest:
+
+    history = None
+    is_redirect = False
+    status_code = 200
+    reason = ''
+    headers = dict()
+    raw = None
+
+    def __init__(self, url, logger):
+
+        self._logger = logger
+        self._logger.warning("Downloading from FTP url: %s", url)
+
+        parsed = urlparse(url)
+        self._ftp = FTP(parsed.hostname)
+        self._ftp.login(parsed.username, parsed.password)
+        self._ftp.voidcmd('TYPE I')
+        self._transfer, self._size = self._ftp.ntransfercmd("RETR %s" % (parsed.path, ))
+        if self._size:
+            self.headers['Content-Length'] = str(self._size)
+
+    def raise_for_status(self):
+        pass
+
+    def close(self):
+        self._ftp.close()
+
+    def iter_content(self, chunk_size):
+
+        while True:
+            chunk = self._transfer.recv(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+
+class FTPAdapter:
+
+    def __init__(self, logger):
+        self.logger = logger
+
+    def send(self, request, *args, **kwargs):
+        assert "Range" not in request.headers
+        return FTPRequest(request.url, self.logger)
 
 
 class RequestRunner:
@@ -247,6 +296,7 @@ class Client(object):
                 self.token = result['access_token']
                 session.auth = None
             session.headers = {"Authorization": self.token}
+            session.mount("ftp://", FTPAdapter(self))
             self._session = session
             self.debug("Token is %s", self.token)
 
@@ -410,6 +460,11 @@ class Client(object):
                 break
 
             self.error("Download incomplete, downloaded %s byte(s) out of %s" % (total, size))
+
+            if isinstance(r, FTPAdapter):
+                self.warning("Ignoring size mismatch")
+                return target
+
             self.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)
             mode = 'ab'
