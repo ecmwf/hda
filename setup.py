@@ -42,6 +42,7 @@ setuptools.setup(
     url='https://github.com/ecmwf/hda',
     description="API to harmonised data access for DIAS/WEkEO",
     long_description=read('README.md'),
+    long_description_content_type="text/markdown",
     packages=setuptools.find_packages(),
     include_package_data=True,
     install_requires=[
