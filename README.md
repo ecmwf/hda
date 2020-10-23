@@ -10,22 +10,34 @@ Documentation about its usage can be found at https://www.wekeo.eu/.
 - requests
 - tqdm
 
-## Installation
-Clone the repository into a folder on your computer and install it, either as a global package or in a virtualenv:
+## Installation the WEkEO HDA Key
 
-    python setup.py install
+1) If you don't have a WEkEO account, please self register at the WEkEO registration page https://www.wekeo.eu/web/guest/user-registration and go to the steps below.
 
-This will also install the required dependencies.
+2) Copy the code below, in the file $HOME/.hdarc (in your Unix/Linux environment). Adapt the following template with the credentials of your WEkEO account:
 
-Finally, create a ``.hdarc`` file into your home directory copying and adapting the following template with the credentials of your WEkEO account:
-
-```yaml
 url: https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker
 user: [username]
 password: [password]
-```
 
-## Basic Usage
+
+## Install the WEkEO HDA client
+
+1) The WEkEO HDA client is a python based library. It provides support for both Python 2.7.x and Python 3.
+
+You can Install the WEkEO HDA client via the package management system pip, by running on Unix/Linux the command shown below.
+
+    pip install hda
+
+This will also install the required dependencies.
+
+
+## Use the WEkEO HDA client for data access
+
+Once the WEkEO HDA API client is installed, it can be used to request data from the datasets listed in the WEkEO catalogue.
+
+On the WEkEO portal, under DATA, each dataset search has a 'Show API request', it displays the json request to be used. The request can be formatted using the interactive form. The api call must follow the syntax.
+
 The client can be used directly into another python script as in the following example:
 
 ```python
@@ -49,5 +61,22 @@ matches.download()
 
 Note that the query must be json valid object. Please refer to the official documentation of the HDA for instructions on how to get the list of the available parameters.
 
-
 Alternatively, it can be wrapped into a script to be executed from the command line. Please refer to the ``demos/demo.py`` file for a simple demostration.
+
+## Advanced Usage
+There are a number of options a user can change for fine-tuning the `Client` instance:
+- `url`: The HDA URL. Normally set in the `.hdarc` file, can be overwritten directly by passing a value to the client.
+- `user`: The HDA user. Normally set in the `.hdarc` file, can be overwritten directly by passing a value to the client.
+- `password`: The HDA password. Normally set in the `.hdarc` file, can be overwritten directly by passing a value to the client.
+- `token`: Credentials can be passed directly with a valid JWT Token that will take precedence over user and password. Normally unused, as the client will require a fresh token upon any API call.
+- `quiet`: Pass `True` to disable logging. Default: `False`.
+- `debug`: Pass `True` to enable debug. Requires `quiet` to be `False`. Default: `False`.
+- `verify`: Whether to verify for SSL certificate of the HDA or not. Normally there is no need to modify the default value. Default: `None`.
+- `timeout`: The time, in seconds, before the client should stop waiting for a response. Default: `None`.
+- `retry_max`: The number of retries before the client should stop trying to get a successful response. Default: 500.
+- `sleep_max`: The time, in seconds, to wait between two attempts. Default: 120.
+- `info_callback`: A callback function that can be attached to the `info` logging level messages. Will replace the default logging. Default: `None`.
+- `warning_callback`: A callback function that can be attached to the `warning` logging level messages. Will replace the default logging. Default: `None`.
+- `error_callback`: A callback function that can be attached to the `error` logging level messages. Will replace the default logging. Default: `None`.
+- `debug_callback`: A callback function that can be attached to the `debug` logging level messages. Will replace the default logging. Default: `None`.
+- `progress`: Whether to show or hide a progress bar. Default: `True`.
