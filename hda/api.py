@@ -54,6 +54,15 @@ def shorten(r, length=80):
         return txt[:length - 3] + "..."
     return txt
 
+def get_filename(response, fallback):
+    """
+    Retrieve the file name from the first redirect response.
+    """
+    r = response.history[-1]
+    if r.status_code == 302 and r.headers.get('Location'):
+        return r.headers.get('Location').split('/')[-1].split('?')[0]
+    return fallback
+
 
 class FTPRequest:
 
@@ -415,7 +424,18 @@ class Client(object):
     def stream(self, target, size, *args):
         full = self.full_url(*args)
 
-        self.info("Downloading %s to %s (%s)", full, target, bytes_to_string(size))
+        filename = target
+        if target.startswith('&'):
+            # For a large number of datasets (mostly from Mercator Ocean),
+            # the provided filename starts with aportion of a query string:
+            # eg: &service=SST_GLO_SST_L4_REP_OBSERVATIONS_010_011-TDS...
+            # It this case, the file name should be retrieved from the
+            # `Location` header of the redirect response.
+            # This mechanism is reusable for other cases, but it is not
+            # always safe - namely not for Cryosat or other ESA datasets.
+            filename = None
+
+        self.info("Downloading %s to %s (%s)", full, filename or 'unknown', bytes_to_string(size))
         start = time.time()
 
         mode = 'wb'
@@ -436,6 +456,9 @@ class Client(object):
 
                 self.debug("Headers: %s", r.headers)
 
+                if filename is None:
+                    filename = get_filename(r, target)
+
                 # https://github.com/ecmwf/hda/issues/3
                 size = int(r.headers.get('Content-Length', size))
 
@@ -447,7 +470,7 @@ class Client(object):
                           leave=False,
                           ) as pbar:
                     pbar.update(total)
-                    with open(target, mode) as f:
+                    with open(filename, mode) as f:
                         for chunk in r.iter_content(chunk_size=1024):
                             if chunk:
                                 f.write(chunk)
@@ -466,12 +489,12 @@ class Client(object):
 
             if isinstance(r, FTPAdapter):
                 self.warning("Ignoring size mismatch")
-                return target
+                return filename
 
             self.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)
             mode = 'ab'
-            total = os.path.getsize(target)
+            total = os.path.getsize(filename)
             sleep *= 1.5
             if sleep > self.sleep_max:
                 sleep = self.sleep_max
@@ -489,4 +512,4 @@ class Client(object):
         if elapsed:
             self.info("Download rate %s/s", bytes_to_string(size / elapsed))
 
-        return target
+        return filename
