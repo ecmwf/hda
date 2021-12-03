@@ -436,6 +436,9 @@ class Client(object):
 
                 self.debug("Headers: %s", r.headers)
 
+                # https://github.com/ecmwf/hda/issues/3
+                size = int(r.headers.get('Content-Length', size))
+
                 with tqdm(total=size,
                           unit_scale=True,
                           unit_divisor=1024,
