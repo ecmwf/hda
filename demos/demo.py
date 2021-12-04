@@ -19,13 +19,13 @@
 # does it submit to any jurisdiction.
 
 
+import json
 import os
 import sys
-import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from hda import Client
+from hda import Client  # noqa
 
 c = Client(debug=True)
 
