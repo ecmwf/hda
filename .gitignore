@@ -6,3 +6,4 @@ S3A*
 issues/
 *.egg-info/
 *.gz
+*.swp

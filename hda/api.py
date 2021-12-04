@@ -127,6 +127,8 @@ class RequestRunner:
 
         sleep = 1
         while status != "completed":
+            if status == "failed":
+                raise Exception(result["message"])
             assert status in ["started", "running"]
             self.debug("Sleeping %s seconds", sleep)
             time.sleep(sleep)
