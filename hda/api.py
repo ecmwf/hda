@@ -319,6 +319,11 @@ class Client(object):
 
         return self._session
 
+    def accept_licence(self):
+        full = self.full_url("termsaccepted/Copernicus_General_License")
+        r = requests.put(full, headers=self.session.headers, data={"accepted": "true"})
+        self.info("===> LICENCE %s", "accepted")
+
     def info(self, *args, **kwargs):
         if self.info_callback:
             self.info_callback(*args, **kwargs)
