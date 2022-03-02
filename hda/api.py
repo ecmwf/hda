@@ -499,7 +499,7 @@ class Client(object):
                     leave=False,
                 ) as pbar:
                     pbar.update(total)
-                    with open(f"{download_dir}/{filename}", mode) as f:
+                    with open(os.path.join(download_dir, filename), mode) as f:
                         for chunk in r.iter_content(chunk_size=1024):
                             if chunk:
                                 f.write(chunk)
