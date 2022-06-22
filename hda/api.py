@@ -189,12 +189,12 @@ class SearchResults:
             self.jobId,
         )
 
-    def download(self):
+    def download(self, download_dir: str = "."):
         for result in self.results:
             query = {"jobId": self.jobId, "uri": result["url"]}
             self.debug(result)
             url = DataOrderRequest(self.client).run(query)
-            self.stream(result.get("filename"), result.get("size"), *url)
+            self.stream(result.get("filename"), result.get("size"), download_dir, *url)
 
 
 class Client(object):
@@ -439,7 +439,7 @@ class Client(object):
         self.debug("<=== %s", shorten(result))
         return result
 
-    def stream(self, target, size, *args):
+    def stream(self, target, size, download_dir, *args):
         full = self.full_url(*args)
 
         filename = target
@@ -452,6 +452,9 @@ class Client(object):
             # This mechanism is reusable for other cases, but it is not
             # always safe - namely not for Cryosat or other ESA datasets.
             filename = None
+
+        if download_dir is None or not os.path.exists(download_dir):
+            download_dir = "."
 
         self.info(
             "Downloading %s to %s (%s)",
@@ -496,7 +499,7 @@ class Client(object):
                     leave=False,
                 ) as pbar:
                     pbar.update(total)
-                    with open(filename, mode) as f:
+                    with open(os.path.join(download_dir, filename), mode) as f:
                         for chunk in r.iter_content(chunk_size=1024):
                             if chunk:
                                 f.write(chunk)
