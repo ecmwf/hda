@@ -207,6 +207,7 @@ class Client(object):
         user=os.environ.get("HDA_USER"),
         password=os.environ.get("HDA_PASSWORD"),
         token=os.environ.get("HDA_TOKEN"),
+        token_timeout=60 * 45,
         quiet=False,
         debug=False,
         verify=None,
@@ -256,13 +257,13 @@ class Client(object):
             raise Exception("Missing/incomplete configuration file: %s" % (dotrc))
 
         self.url = url
-        self.token = token
         self.user = user
         self.password = password
 
         self.quiet = quiet
         self.verify = True if verify else False
         self.timeout = timeout
+        self.token_timeout = token_timeout
         self.sleep_max = sleep_max
         self.retry_max = retry_max
         self.progress = progress
@@ -273,12 +274,15 @@ class Client(object):
         self.error_callback = error_callback
 
         self._session = None
+        self._token = None
+        self._token_creation_time = None
 
         self.debug(
             "HDA %s",
             dict(
                 url=self.url,
                 token=self.token,
+                token_timeout=self.token_timeout,
                 user=self.user,
                 password=self.password,
                 quiet=self.quiet,
@@ -299,24 +303,42 @@ class Client(object):
         return full
 
     @property
+    def token(self):
+        now = int(time.time())
+
+        def is_token_expired():
+            return (
+                self._token_creation_time is None
+                or (now - self._token_creation_time) > self.token_timeout
+            )
+
+        if is_token_expired():
+            self.debug("====== Token expired, renewing")
+            self._token = self.get_token()
+            self._token_creation_time = now
+
+        return self._token
+
+    def get_token(self):
+        session = requests.Session()
+        session.auth = (self.user, self.password)
+        full = self.full_url("gettoken")
+        self.debug("===> GET %s", full)
+        r = self.robust(session.get)(full)
+        r.raise_for_status()
+        result = r.json()
+        self.debug("<=== %s", shorten(result))
+        session.auth = None
+        return result["access_token"]
+
+    @property
     def session(self):
         if self._session is None:
             session = requests.Session()
-            if self.token is None:
-                session.auth = (self.user, self.password)
-                full = self.full_url("gettoken")
-                self.debug("===> GET %s", full)
-                r = self.robust(session.get)(full)
-                r.raise_for_status()
-                result = r.json()
-                self.debug("<=== %s", shorten(result))
-                self.token = result["access_token"]
-                session.auth = None
-            session.headers = {"Authorization": self.token}
             session.mount("ftp://", FTPAdapter(self))
             self._session = session
-            self.debug("Token is %s", self.token)
-
+        self._session.headers = {"Authorization": self.token}
+        self.debug("Token is %s", self.token)
         return self._session
 
     def info(self, *args, **kwargs):
