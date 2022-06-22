@@ -207,7 +207,7 @@ class Client(object):
         user=os.environ.get("HDA_USER"),
         password=os.environ.get("HDA_PASSWORD"),
         token=os.environ.get("HDA_TOKEN"),
-        token_timeout=60*45,
+        token_timeout=60 * 45,
         quiet=False,
         debug=False,
         verify=None,
@@ -307,8 +307,10 @@ class Client(object):
         now = int(time.time())
 
         def is_token_expired():
-            return self._token_creation_time is None or \
-                (now - self._token_creation_time) > self.token_timeout
+            return (
+                self._token_creation_time is None
+                or (now - self._token_creation_time) > self.token_timeout
+            )
 
         if is_token_expired():
             self.debug("====== Token expired, renewing")
