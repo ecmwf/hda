@@ -397,6 +397,11 @@ class Client(object):
                 if r is not None:
                     if not retriable(r.status_code, r.reason):
                         return r
+
+                    if r.status_code == requests.codes.forbidden:
+                        # Try to renew the token next time
+                        self._token_creation_time = None
+
                     self.warning(
                         "Recovering from HTTP error [%s %s], attemps %s of %s",
                         r.status_code,

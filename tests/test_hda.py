@@ -46,9 +46,9 @@ def test_hda_1():
         ],
         "dateRangeSelectValues": [
             {
-                "name": "position",
-                "start": "2021-07-03T00:00:00.000Z",
-                "end": "2021-07-04T00:00:00.000Z",
+                "name": "end",
+                "start": "2022-07-03T00:00:00.000Z",
+                "end": "2022-07-04T00:00:00.000Z",
             }
         ],
         "stringChoiceValues": [
@@ -58,7 +58,7 @@ def test_hda_1():
     }
     matches = c.search(r)
     print(matches)
-    assert len(matches.results) == 2, matches
+    assert len(matches.results) == 1, matches
     # Too large to download
     # matches.download()
 
@@ -68,16 +68,17 @@ def test_hda_2():
     c = Client(url="https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker")
 
     r = {
-        "datasetId": "EO:ECMWF:DAT:ERA5_HOURLY_VARIABLES_ON_PRESSURE_LEVELS",
-        "stringChoiceValues": [{"name": "format", "value": "grib"}],
+        "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
         "multiStringSelectValues": [
-            {"name": "variable", "value": ["temperature"]},
-            {"name": "pressure_level", "value": ["500"]},
-            {"name": "product_type", "value": ["ensemble_mean"]},
-            {"name": "year", "value": ["2014"]},
-            {"name": "month", "value": ["11"]},
-            {"name": "day", "value": ["10"]},
-            {"name": "time", "value": ["12:00"]},
+            {"name": "type", "value": ["validated_reanalysis"]},
+            {"name": "variable", "value": ["ammonia"]},
+            {"name": "model", "value": ["chimere"]},
+            {"name": "level", "value": ["0"]},
+            {"name": "month", "value": ["01"]},
+            {"name": "year", "value": ["2018"]},
+        ],
+        "stringChoiceValues": [
+            {"name": "format", "value": "tgz"},
         ],
     }
 
