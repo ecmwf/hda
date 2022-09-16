@@ -319,6 +319,9 @@ class Client(object):
 
         return self._token
 
+    def invalidate_token(self):
+        self._token_creation_time = None
+
     def get_token(self):
         session = requests.Session()
         session.auth = (self.user, self.password)
@@ -337,9 +340,12 @@ class Client(object):
             session = requests.Session()
             session.mount("ftp://", FTPAdapter(self))
             self._session = session
+        self._attach_auth()
+        return self._session
+
+    def _attach_auth(self):
         self._session.headers = {"Authorization": self.token}
         self.debug("Token is %s", self.token)
-        return self._session
 
     def info(self, *args, **kwargs):
         if self.info_callback:
@@ -366,7 +372,7 @@ class Client(object):
             self.logger.debug(*args, **kwargs)
 
     def robust(self, call):
-        def retriable(code, reason):
+        def retriable(code):
 
             if code in [
                 requests.codes.internal_server_error,
@@ -375,6 +381,7 @@ class Client(object):
                 requests.codes.gateway_timeout,
                 requests.codes.too_many_requests,
                 requests.codes.request_timeout,
+                requests.codes.forbidden,
             ]:
                 return True
 
@@ -395,12 +402,13 @@ class Client(object):
                     )
 
                 if r is not None:
-                    if not retriable(r.status_code, r.reason):
+                    if not retriable(r.status_code):
                         return r
 
                     if r.status_code == requests.codes.forbidden:
-                        # Try to renew the token next time
-                        self._token_creation_time = None
+                        self.debug("Trying to renew token")
+                        self.invalidate_token()
+                        self._attach_auth()
 
                     self.warning(
                         "Recovering from HTTP error [%s %s], attemps %s of %s",
@@ -443,8 +451,10 @@ class Client(object):
 
         if self.debug:
             self.session  # Force login
+
         full = self.full_url(*args)
         self.debug("===> GET %s", full)
+
         r = self.robust(self.session.get)(full, timeout=self.timeout)
         r.raise_for_status()
         result = r.json()
