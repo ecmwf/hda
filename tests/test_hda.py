@@ -58,7 +58,7 @@ def test_hda_1():
     }
     matches = c.search(r)
     print(matches)
-    assert len(matches.results) == 1, matches
+    assert len(matches.results) == 940, matches
     # Too large to download
     # matches.download()
 
