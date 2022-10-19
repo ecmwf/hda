@@ -445,7 +445,11 @@ class Client(object):
         return self.get("datasets", datasetId)
 
     def metadata(self, datasetId):
-        return self.get("querymetadata", datasetId)
+        response = self.get("querymetadata", datasetId)
+        # Remove extra information only useful on the WEkEO UI
+        if "constraints" in response:
+            del response["constraints"]
+        return response
 
     def get(self, *args):
 
