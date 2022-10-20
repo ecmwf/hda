@@ -30,7 +30,7 @@ def read(fname):
     return io.open(file_path, encoding="utf-8").read()
 
 
-version = "0.3.3"
+version = "v0.3.3"
 
 
 setuptools.setup(
