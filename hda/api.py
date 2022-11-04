@@ -334,6 +334,14 @@ class Client(object):
         session.auth = None
         return result["access_token"]
 
+    def accept_tac(self):
+        url = "termsaccepted/Copernicus_General_License"
+        result = self.get(url)
+        if not result["accepted"]:
+            self.debug("TAC not yet accepted")
+            result = self.put({"accepted": True}, url)
+            self.debug("<=== %s", result)
+
     @property
     def session(self):
         if self._session is None:
@@ -426,6 +434,7 @@ class Client(object):
         return wrapped
 
     def search(self, query):
+        self.accept_tac()
         return SearchResults(self, *DataRequestRunner(self).run(query))
 
     def _datasets(self):
@@ -452,10 +461,6 @@ class Client(object):
         return response
 
     def get(self, *args):
-
-        if self.debug:
-            self.session  # Force login
-
         full = self.full_url(*args)
         self.debug("===> GET %s", full)
 
@@ -466,10 +471,6 @@ class Client(object):
         return result
 
     def post(self, message, *args):
-
-        if self.debug:
-            self.session  # Force login
-
         full = self.full_url(*args)
         self.debug("===> POST %s", full)
         self.debug("===> POST %s", shorten(message))
@@ -479,6 +480,15 @@ class Client(object):
         result = r.json()
         self.debug("<=== %s", shorten(result))
         return result
+
+    def put(self, message, *args):
+        full = self.full_url(*args)
+        self.debug("===> PUT %s", full)
+        self.debug("===> PUT %s", shorten(message))
+
+        r = self.robust(self.session.put)(full, json=message, timeout=self.timeout)
+        r.raise_for_status()
+        return r
 
     def stream(self, target, size, download_dir, *args):
         full = self.full_url(*args)
