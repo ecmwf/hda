@@ -29,6 +29,8 @@ import requests
 from tqdm import tqdm
 
 
+BROKEN_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
+
 def bytes_to_string(n):
     u = ["", "K", "M", "G", "T", "P"]
     i = 0
@@ -44,7 +46,7 @@ def read_config(path):
         for line in f.readlines():
             if ":" in line:
                 k, v = line.strip().split(":", 1)
-                if k in ("url", "user", "password", "token", "verify"):
+                if k in ("url", "user", "password", "verify"):
                     config[k] = v.strip()
     return config
 
@@ -64,6 +66,18 @@ def get_filename(response, fallback):
     if r.status_code == 302 and r.headers.get("Location"):
         return r.headers.get("Location").split("/")[-1].split("?")[0]
     return fallback
+
+
+class HDAError(Exception): pass
+
+
+class ConfigurationError(HDAError): pass
+
+
+class RequestFailedError(HDAError): pass
+
+
+class DownloadSizeError(HDAError): pass
 
 
 class FTPRequest:
@@ -121,33 +135,33 @@ class RequestRunner:
 
     def _run(self, query):
         result = self.post(query, self.action)
-        jobId = result[self.idKey]
+        job_id = result[self.id_key]
 
         status = result["status"]
 
         sleep = 1
         while status != "completed":
             if status == "failed":
-                raise Exception(result["message"])
+                raise RequestFailedError(result["message"])
             assert status in ["started", "running"]
             self.debug("Sleeping %s seconds", sleep)
             time.sleep(sleep)
-            result = self.get(self.action, "status", jobId)
+            result = self.get(self.action, "status", job_id)
             status = result["status"]
             sleep *= 1.1
             if sleep > self.sleep_max:
                 sleep = self.sleep_max
 
-        return result, jobId
+        return result, job_id
 
 
 class DataRequestRunner(RequestRunner):
 
     action = "datarequest"
-    idKey = "jobId"
+    id_key = "jobId"
 
-    def _paginate(self, jobId):
-        result = self.get(self.action, "jobs", jobId, "result")
+    def _paginate(self, job_id):
+        result = self.get(self.action, "jobs", job_id, "result")
         page = result
         for p in page["content"]:
             yield p
@@ -159,42 +173,81 @@ class DataRequestRunner(RequestRunner):
                 yield p
 
     def run(self, query):
-        _, jobId = self._run(query)
-        return list(self._paginate(jobId)), jobId
+        _, job_id = self._run(query)
+        return list(self._paginate(job_id)), job_id
 
 
 class DataOrderRequest(RequestRunner):
 
     action = "dataorder"
-    idKey = "orderId"
+    id_key = "orderId"
 
     def run(self, query):
-        _, orderId = self._run(query)
-        return ("dataorder", "download", orderId)
+        _, order_id = self._run(query)
+        return ("dataorder", "download", order_id)
 
 
 class SearchResults:
-    def __init__(self, client, results, jobId):
+    def __init__(self, client, results, job_id):
         self.client = client
         self.debug = client.debug
         self.stream = client.stream
         self.results = results
-        self.jobId = jobId
+        self.job_id = job_id
         self.volume = sum(r.get("size", 0) for r in results)
 
     def __repr__(self):
         return "SearchResults[items=%s,volume=%s,jobId=%s]" % (
             len(self.results),
             bytes_to_string(self.volume),
-            self.jobId,
+            self.job_id,
         )
 
     def download(self, download_dir: str = "."):
         for result in self.results:
-            query = {"jobId": self.jobId, "uri": result["url"]}
+            query = {"jobId": self.job_id, "uri": result["url"]}
             self.debug(result)
             url = DataOrderRequest(self.client).run(query)
             self.stream(result.get("filename"), result.get("size"), download_dir, *url)
+
+
+class Configuration:
+
+    def __init__(
+        self,
+        url=os.environ.get("HDA_URL"),
+        user=os.environ.get("HDA_USER"),
+        password=os.environ.get("HDA_PASSWORD"),
+        verify=None,
+        path=None
+    ):
+        dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
+
+        if url is None or user is None or password is None:
+            try:
+                config = read_config(dotrc)
+
+                if url is None:
+                    url = config.get("url")
+
+                if user is None:
+                    user = config.get("user")
+
+                if password is None:
+                    password = config.get("password")
+
+                verify = config.get("verify", True)
+
+            except FileNotFoundError:
+                raise ConfigurationError("Missing configuration file: %s" % (dotrc))
+
+        if url is None or user is None or password is None:
+            raise ConfigurationError("Missing/incomplete configuration file: %s" % (dotrc))
+
+        self.url = url
+        self.user = user
+        self.password = password
+        self.verify = True if verify is None else verify
 
 
 class Client(object):
@@ -203,14 +256,10 @@ class Client(object):
 
     def __init__(
         self,
-        url=os.environ.get("HDA_URL"),
-        user=os.environ.get("HDA_USER"),
-        password=os.environ.get("HDA_PASSWORD"),
-        token=os.environ.get("HDA_TOKEN"),
+        config=None,
         token_timeout=60 * 45,
         quiet=False,
         debug=False,
-        verify=None,
         timeout=None,
         retry_max=500,
         sleep_max=120,
@@ -232,36 +281,8 @@ class Client(object):
                 level=level, format="%(asctime)s %(levelname)s %(message)s"
             )
 
-        dotrc = os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
-
-        if url is None or (token is None and user is None and password is None):
-            if os.path.exists(dotrc):
-                config = read_config(dotrc)
-
-                if token is None:
-                    token = config.get("token")
-
-                if user is None:
-                    user = config.get("user")
-
-                if password is None:
-                    password = config.get("password")
-
-                if url is None:
-                    url = config.get("url")
-
-                if verify is None:
-                    verify = int(config.get("verify", 1))
-
-        if url is None or (token is None and user is None):
-            raise Exception("Missing/incomplete configuration file: %s" % (dotrc))
-
-        self.url = url
-        self.user = user
-        self.password = password
-
+        self.config = config or Configuration()
         self.quiet = quiet
-        self.verify = True if verify else False
         self.timeout = timeout
         self.token_timeout = token_timeout
         self.sleep_max = sleep_max
@@ -280,13 +301,13 @@ class Client(object):
         self.debug(
             "HDA %s",
             dict(
-                url=self.url,
+                url=self.config.url,
                 token=self.token,
                 token_timeout=self.token_timeout,
-                user=self.user,
-                password=self.password,
+                user=self.config.user,
+                password=self.config.password,
                 quiet=self.quiet,
-                verify=self.verify,
+                verify=self.config.verify,
                 timeout=self.timeout,
                 sleep_max=self.sleep_max,
                 retry_max=self.retry_max,
@@ -299,7 +320,7 @@ class Client(object):
         if len(args) == 1 and args[0].split(":")[0] in ("http", "https"):
             return args[0]
 
-        full = "/".join([str(x) for x in [self.url] + list(args)])
+        full = "/".join([str(x) for x in [self.config.url] + list(args)])
         return full
 
     @property
@@ -324,7 +345,7 @@ class Client(object):
 
     def get_token(self):
         session = requests.Session()
-        session.auth = (self.user, self.password)
+        session.auth = (self.config.user, self.config.password)
         full = self.full_url("gettoken")
         self.debug("===> GET %s", full)
         r = self.robust(session.get)(full)
@@ -380,20 +401,6 @@ class Client(object):
             self.logger.debug(*args, **kwargs)
 
     def robust(self, call):
-        def retriable(code):
-
-            if code in [
-                requests.codes.internal_server_error,
-                requests.codes.bad_gateway,
-                requests.codes.service_unavailable,
-                requests.codes.gateway_timeout,
-                requests.codes.too_many_requests,
-                requests.codes.request_timeout,
-                requests.codes.forbidden,
-            ]:
-                return True
-
-            return False
 
         def wrapped(*args, **kwargs):
             tries = 0
@@ -403,23 +410,34 @@ class Client(object):
                 except requests.exceptions.ConnectionError as e:
                     r = None
                     self.warning(
-                        "Recovering from connection error [%s], attemx ps %s of %s",
+                        "Recovering from connection error [%s], attempt %s of %s",
                         e,
                         tries,
                         self.retry_max,
                     )
 
                 if r is not None:
-                    if not retriable(r.status_code):
+                    if r.status_code not in [
+                        requests.codes.internal_server_error,
+                        requests.codes.bad_gateway,
+                        requests.codes.service_unavailable,
+                        requests.codes.gateway_timeout,
+                        requests.codes.too_many_requests,
+                        requests.codes.request_timeout,
+                        requests.codes.forbidden,
+                    ]:
                         return r
 
                     if r.status_code == requests.codes.forbidden:
-                        self.debug("Trying to renew token")
+                        # If the request is forbidden, either the token is expired or
+                        # the credentials are invalid.
+                        # In both cases, we give just another single try.
+                        tries = self.retry_max
+                        self.debug("Trying to renew the token")
                         self.invalidate_token()
-                        self._attach_auth()
 
                     self.warning(
-                        "Recovering from HTTP error [%s %s], attemps %s of %s",
+                        "Recovering from HTTP error [%s %s], attempt %s of %s",
                         r.status_code,
                         r.reason,
                         tries,
@@ -430,6 +448,8 @@ class Client(object):
 
                 self.warning("Retrying in %s seconds", self.sleep_max)
                 time.sleep(self.sleep_max)
+
+            return r
 
         return wrapped
 
@@ -526,7 +546,7 @@ class Client(object):
             r = self.robust(self.session.get)(
                 full,
                 stream=True,
-                verify=self.verify,
+                verify=self.config.verify,
                 headers=headers,
                 timeout=self.timeout,
             )
@@ -585,7 +605,7 @@ class Client(object):
             self.warning("Resuming download at byte %s" % (total,))
 
         if total < size:
-            raise Exception(
+            raise DownloadSizeError(
                 "Download failed: downloaded %s byte(s) out of %s (missing %s)"
                 % (total, size, size - total)
             )
