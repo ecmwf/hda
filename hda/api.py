@@ -103,6 +103,7 @@ class FTPRequest:
             self.headers["Content-Length"] = str(self._size)
 
     def raise_for_status(self):
+        """Don't deal with FTP requests code.s"""
         pass
 
     def close(self):
@@ -117,7 +118,7 @@ class FTPRequest:
             yield chunk
 
 
-class FTPAdapter:
+class FTPAdapter(requests.adapters.BaseAdapter):
     def __init__(self, logger):
         self.logger = logger
 
