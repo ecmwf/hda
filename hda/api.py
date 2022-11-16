@@ -199,9 +199,29 @@ class SearchResults:
 
     def __repr__(self):
         return "SearchResults[items=%s,volume=%s,jobId=%s]" % (
-            len(self.results),
+            len(self),
             bytes_to_string(self.volume),
             self.job_id,
+        )
+
+    def __len__(self):
+        return len(self.results)
+
+    def __getitem__(self, index):
+        if isinstance(index, int):
+            # This will re-raise any possible IndexError,
+            # since slicing is more permissive
+            self.results[index]
+
+            if index != -1:
+                index = slice(index, index + 1, None)
+            else:
+                index = slice(index, None, None)
+
+        return self.__class__(
+            client=self.client,
+            results=self.results[index],
+            job_id=self.job_id
         )
 
     def download(self, download_dir: str = "."):
@@ -471,11 +491,11 @@ class Client(object):
     def datasets(self):
         return list(self._datasets())
 
-    def dataset(self, datasetId):
-        return self.get("datasets", datasetId)
+    def dataset(self, dataset_id):
+        return self.get("datasets", dataset_id)
 
-    def metadata(self, datasetId):
-        response = self.get("querymetadata", datasetId)
+    def metadata(self, dataset_id):
+        response = self.get("querymetadata", dataset_id)
         # Remove extra information only useful on the WEkEO UI
         if "constraints" in response:
             del response["constraints"]
