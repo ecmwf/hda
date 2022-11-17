@@ -222,7 +222,9 @@ class SearchResults:
             else:
                 index = slice(index, None, None)
 
-        return self.__class__(client=self.client, results=self.results[index], job_id=self.job_id)
+        return self.__class__(
+            client=self.client, results=self.results[index], job_id=self.job_id
+        )
 
     def download(self, download_dir: str = "."):
         for result in self.results:
@@ -262,7 +264,9 @@ class Configuration:
                 raise ConfigurationError("Missing configuration file: %s" % (dotrc))
 
         if url is None or user is None or password is None:
-            raise ConfigurationError("Missing/incomplete configuration file: %s" % (dotrc))
+            raise ConfigurationError(
+                "Missing/incomplete configuration file: %s" % (dotrc)
+            )
 
         self.url = url
         self.user = user
@@ -296,7 +300,9 @@ class Client(object):
             else:
                 level = logging.INFO
 
-            logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(message)s")
+            logging.basicConfig(
+                level=level, format="%(asctime)s %(levelname)s %(message)s"
+            )
 
         self.config = config or Configuration()
         self.quiet = quiet
@@ -339,7 +345,10 @@ class Client(object):
         now = int(time.time())
 
         def is_token_expired():
-            return self._token_creation_time is None or (now - self._token_creation_time) > self.token_timeout
+            return (
+                self._token_creation_time is None
+                or (now - self._token_creation_time) > self.token_timeout
+            )
 
         if is_token_expired():
             self.debug("====== Token expired, renewing")
@@ -584,7 +593,9 @@ class Client(object):
             if total >= size:
                 break
 
-            self.error("Download incomplete, downloaded %s byte(s) out of %s" % (total, size))
+            self.error(
+                "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
+            )
 
             if isinstance(r, FTPAdapter):
                 self.warning("Ignoring size mismatch")
@@ -603,11 +614,15 @@ class Client(object):
 
         if total < size:
             raise DownloadSizeError(
-                "Download failed: downloaded %s byte(s) out of %s (missing %s)" % (total, size, size - total)
+                "Download failed: downloaded %s byte(s) out of %s (missing %s)"
+                % (total, size, size - total)
             )
 
         if total > size:
-            self.warning("Oops, downloaded %s byte(s), was supposed to be %s (extra %s)" % (total, size, total - size))
+            self.warning(
+                "Oops, downloaded %s byte(s), was supposed to be %s (extra %s)"
+                % (total, size, total - size)
+            )
 
         elapsed = time.time() - start
         if elapsed:

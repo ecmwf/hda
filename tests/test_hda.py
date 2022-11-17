@@ -124,7 +124,11 @@ def test_hda_1():
     r = {
         "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
         "dateRangeSelectValues": [
-            {"name": "dtrange", "start": "2020-04-11T00:00:00.000Z", "end": "2020-05-21T00:00:00.000Z"}
+            {
+                "name": "dtrange",
+                "start": "2020-04-11T00:00:00.000Z",
+                "end": "2020-05-21T00:00:00.000Z",
+            }
         ],
     }
 
