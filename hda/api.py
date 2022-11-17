@@ -284,12 +284,11 @@ class Client(object):
         timeout=None,
         retry_max=500,
         sleep_max=120,
-        info_callback=None,
-        warning_callback=None,
-        error_callback=None,
-        debug_callback=None,
+        logger=None,
         progress=True,
     ):
+        if logger is not None:
+            self.logger = logger
 
         if not quiet:
 
@@ -310,11 +309,6 @@ class Client(object):
         self.retry_max = retry_max
         self.progress = progress
 
-        self.debug_callback = debug_callback
-        self.warning_callback = warning_callback
-        self.info_callback = info_callback
-        self.error_callback = error_callback
-
         self._session = None
         self._token = None
         self._token_creation_time = None
@@ -323,7 +317,6 @@ class Client(object):
             "HDA %s",
             dict(
                 url=self.config.url,
-                token=self.token,
                 token_timeout=self.token_timeout,
                 user=self.config.user,
                 password=self.config.password,
@@ -398,27 +391,19 @@ class Client(object):
         self.debug("Token is %s", self.token)
 
     def info(self, *args, **kwargs):
-        if self.info_callback:
-            self.info_callback(*args, **kwargs)
-        else:
+        if hasattr(self.logger, 'info'):
             self.logger.info(*args, **kwargs)
 
     def warning(self, *args, **kwargs):
-        if self.warning_callback:
-            self.warning_callback(*args, **kwargs)
-        else:
+        if hasattr(self.logger, 'warning'):
             self.logger.warning(*args, **kwargs)
 
     def error(self, *args, **kwargs):
-        if self.error_callback:
-            self.error_callback(*args, **kwargs)
-        else:
+        if hasattr(self.logger, 'error'):
             self.logger.error(*args, **kwargs)
 
     def debug(self, *args, **kwargs):
-        if self.debug_callback:
-            self.debug_callback(*args, **kwargs)
-        else:
+        if hasattr(self.logger, 'debug'):
             self.logger.debug(*args, **kwargs)
 
     def robust(self, call):
@@ -537,7 +522,7 @@ class Client(object):
         filename = target
         if target.startswith("&"):
             # For a large number of datasets (mostly from Mercator Ocean),
-            # the provided filename starts with aportion of a query string:
+            # the provided filename starts with a portion of a query string:
             # eg: &service=SST_GLO_SST_L4_REP_OBSERVATIONS_010_011-TDS...
             # It this case, the file name should be retrieved from the
             # `Location` header of the redirect response.
