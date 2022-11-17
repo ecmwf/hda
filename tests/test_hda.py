@@ -34,36 +34,28 @@ CUSTOM_HDRRC = os.path.join(BASE_DIR, "tests/custom_config.txt")
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_custom_url_config():
-    config = Configuration(
-        url="TEST"
-    )
+    config = Configuration(url="TEST")
     c = Client(config=config)
     assert c.config.url == "TEST"
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_custom_user_config():
-    config = Configuration(
-        user="TEST"
-    )
+    config = Configuration(user="TEST")
     c = Client(config=config)
     assert c.config.user == "TEST"
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_custom_password_config():
-    config = Configuration(
-        password="TEST"
-    )
+    config = Configuration(password="TEST")
     c = Client(config=config)
     assert c.config.password == "TEST"
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_custom_path_config():
-    config = Configuration(
-        path=CUSTOM_HDRRC
-    )
+    config = Configuration(path=CUSTOM_HDRRC)
     c = Client(config=config)
     assert c.config.url == "TESTURL"
     assert c.config.user == "TESTUSER"
@@ -72,11 +64,11 @@ def test_custom_path_config():
 
 def test_search_results_slicing():
     r = [
-        {'id': 0, 'size': 10},
-        {'id': 1, 'size': 20},
-        {'id': 2, 'size': 30},
-        {'id': 3, 'size': 40},
-        {'id': 4, 'size': 50},
+        {"id": 0, "size": 10},
+        {"id": 1, "size": 20},
+        {"id": 2, "size": 30},
+        {"id": 3, "size": 40},
+        {"id": 4, "size": 50},
     ]
     s = SearchResults(Client(), r, None)
     assert len(s[0]) == 1
@@ -90,32 +82,39 @@ def test_search_results_slicing():
 
 
 class Logger:
-    def info(self, *args, **kwargs): pass
-    def debug(self, *args, **kwargs): pass
-    def warning(self, *args, **kwargs): pass
-    def error(self, *args, **kwargs): pass
+    def info(self, *args, **kwargs):
+        pass
+
+    def debug(self, *args, **kwargs):
+        pass
+
+    def warning(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        pass
 
 
 def test_custom_logger():
-    with patch.object(Logger, 'info', return_value=None) as mock_info:
+    with patch.object(Logger, "info", return_value=None) as mock_info:
         c = Client(logger=Logger())
-        c.info('message')
-        mock_info.assert_called_with('message')
+        c.info("message")
+        mock_info.assert_called_with("message")
 
-    with patch.object(Logger, 'debug', return_value=None) as mock_debug:
+    with patch.object(Logger, "debug", return_value=None) as mock_debug:
         c = Client(logger=Logger())
-        c.debug('message')
-        mock_debug.assert_called_with('message')
+        c.debug("message")
+        mock_debug.assert_called_with("message")
 
-    with patch.object(Logger, 'warning', return_value=None) as mock_warning:
+    with patch.object(Logger, "warning", return_value=None) as mock_warning:
         c = Client(logger=Logger())
-        c.warning('message')
-        mock_warning.assert_called_with('message')
+        c.warning("message")
+        mock_warning.assert_called_with("message")
 
-    with patch.object(Logger, 'error', return_value=None) as mock_error:
+    with patch.object(Logger, "error", return_value=None) as mock_error:
         c = Client(logger=Logger())
-        c.error('message')
-        mock_error.assert_called_with('message')
+        c.error("message")
+        mock_error.assert_called_with("message")
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
@@ -125,12 +124,8 @@ def test_hda_1():
     r = {
         "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
         "dateRangeSelectValues": [
-        {
-            "name": "dtrange",
-            "start": "2020-04-11T00:00:00.000Z",
-            "end": "2020-05-21T00:00:00.000Z"
-        }
-        ]
+            {"name": "dtrange", "start": "2020-04-11T00:00:00.000Z", "end": "2020-05-21T00:00:00.000Z"}
+        ],
     }
 
     matches = c.search(r)
