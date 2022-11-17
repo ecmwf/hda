@@ -28,7 +28,6 @@ from urllib.parse import urlparse
 import requests
 from tqdm import tqdm
 
-
 BROKEN_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
 
 def bytes_to_string(n):
