@@ -62,6 +62,15 @@ def test_custom_path_config():
     assert c.config.password == "TESTPASSWORD"
 
 
+@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
+def test_mixed_config():
+    config = Configuration(user="TU", password="TP", path=CUSTOM_HDRRC)
+    c = Client(config=config)
+    assert c.config.url == "TESTURL"
+    assert c.config.user == "TU"
+    assert c.config.password == "TP"
+
+
 def test_search_results_slicing():
     r = [
         {"id": 0, "size": 10},
