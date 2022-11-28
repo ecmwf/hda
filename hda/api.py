@@ -32,7 +32,7 @@ BROKEN_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
 
 
 def bytes_to_string(n):
-    u = ["", "K", "M", "G", "T", "P"]
+    u = ["", "KB", "MB", "GB", "TB", "PB"]
     i = 0
     while n >= 1024:
         n /= 1024.0
