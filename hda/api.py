@@ -200,6 +200,7 @@ class SearchResults:
         self.results = results
         self.job_id = job_id
         self.volume = sum(r.get("size", 0) for r in results)
+        self._dataorders_cache = {}
 
     def __repr__(self):
         return "SearchResults[items=%s,volume=%s,jobId=%s]" % (
@@ -222,15 +223,20 @@ class SearchResults:
             else:
                 index = slice(index, None, None)
 
-        return self.__class__(
+        instance = self.__class__(
             client=self.client, results=self.results[index], job_id=self.job_id
         )
+        instance._dataorders_cache = self._dataorders_cache
+        return instance
 
     def download(self, download_dir: str = "."):
         for result in self.results:
             query = {"jobId": self.job_id, "uri": result["url"]}
             self.debug(result)
-            url = DataOrderRequest(self.client).run(query)
+            url = self._dataorders_cache.get(result["url"])
+            if url is None:
+                url = DataOrderRequest(self.client).run(query)
+                self._dataorders_cache[result["url"]] = url
             self.stream(result.get("filename"), result.get("size"), download_dir, *url)
 
 
