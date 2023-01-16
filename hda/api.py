@@ -16,7 +16,12 @@
 # granted to it by virtue of its status as an intergovernmental organisation nor
 # does it submit to any jurisdiction.
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import (
+    absolute_import,
+    division,
+    print_function,
+    unicode_literals,
+)
 
 import json
 import logging
@@ -24,11 +29,14 @@ import os
 import time
 from ftplib import FTP
 from urllib.parse import urlparse
+from warnings import warn
 
 import requests
 from tqdm import tqdm
 
 BROKEN_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
+
+logger = logging.getLogger(__name__)
 
 
 def bytes_to_string(n):
@@ -93,16 +101,17 @@ class FTPRequest:
     headers = dict()
     raw = None
 
-    def __init__(self, url, logger):
+    def __init__(self, url):
 
-        self._logger = logger
-        self._logger.warning("Downloading from FTP url: %s", url)
+        logger.warning("Downloading from FTP url: %s", url)
 
         parsed = urlparse(url)
         self._ftp = FTP(parsed.hostname)
         self._ftp.login(parsed.username, parsed.password)
         self._ftp.voidcmd("TYPE I")
-        self._transfer, self._size = self._ftp.ntransfercmd("RETR %s" % (parsed.path,))
+        self._transfer, self._size = self._ftp.ntransfercmd(
+            "RETR %s" % (parsed.path,)
+        )
         if self._size:
             self.headers["Content-Length"] = str(self._size)
 
@@ -123,19 +132,15 @@ class FTPRequest:
 
 
 class FTPAdapter(requests.adapters.BaseAdapter):
-    def __init__(self, logger):
-        self.logger = logger
-
     def send(self, request, *args, **kwargs):
         assert "Range" not in request.headers
-        return FTPRequest(request.url, self.logger)
+        return FTPRequest(request.url)
 
 
 class RequestRunner:
     def __init__(self, client):
         self.get = client.get
         self.post = client.post
-        self.debug = client.debug
         self.sleep_max = client.sleep_max
 
     def _run(self, query):
@@ -149,7 +154,7 @@ class RequestRunner:
             if status == "failed":
                 raise RequestFailedError(result["message"])
             assert status in ["started", "running"]
-            self.debug("Sleeping %s seconds", sleep)
+            logger.debug("Sleeping %s seconds", sleep)
             time.sleep(sleep)
             result = self.get(self.action, "status", job_id)
             status = result["status"]
@@ -172,7 +177,7 @@ class DataRequestRunner(RequestRunner):
             yield p
 
         while page.get("nextPage"):
-            self.debug(json.dumps(page, indent=4))
+            logger.debug(json.dumps(page, indent=4))
             page = self.get(page["nextPage"])
             for p in page["content"]:
                 yield p
@@ -195,7 +200,6 @@ class DataOrderRequest(RequestRunner):
 class SearchResults:
     def __init__(self, client, results, job_id):
         self.client = client
-        self.debug = client.debug
         self.stream = client.stream
         self.results = results
         self.job_id = job_id
@@ -232,12 +236,14 @@ class SearchResults:
     def download(self, download_dir: str = "."):
         for result in self.results:
             query = {"jobId": self.job_id, "uri": result["url"]}
-            self.debug(result)
+            logger.debug(result)
             url = self._dataorders_cache.get(result["url"])
             if url is None:
                 url = DataOrderRequest(self.client).run(query)
                 self._dataorders_cache[result["url"]] = url
-            self.stream(result.get("filename"), result.get("size"), download_dir, *url)
+            self.stream(
+                result.get("filename"), result.get("size"), download_dir, *url
+            )
 
 
 class Configuration:
@@ -249,7 +255,9 @@ class Configuration:
         verify=None,
         path=None,
     ):
-        dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
+        dotrc = path or os.environ.get(
+            "HDA_RC", os.path.expanduser("~/.hdarc")
+        )
 
         if url is None or user is None or password is None:
             try:
@@ -267,7 +275,9 @@ class Configuration:
                 verify = config.get("verify", True)
 
             except FileNotFoundError:
-                raise ConfigurationError("Missing configuration file: %s" % (dotrc))
+                raise ConfigurationError(
+                    "Missing configuration file: %s" % (dotrc)
+                )
 
         if url is None or user is None or password is None:
             raise ConfigurationError(
@@ -281,37 +291,34 @@ class Configuration:
 
 
 class Client(object):
-
-    logger = logging.getLogger("hda")
-
     def __init__(
         self,
         config=None,
         token_timeout=60 * 45,
-        quiet=False,
-        debug=False,
+        quite=None,
+        debug=None,
         timeout=None,
         retry_max=500,
         sleep_max=120,
-        logger=None,
         progress=True,
     ):
-        if logger is not None:
-            self.logger = logger
+        if quite is not None:
+            warn(
+                "The 'quite' argument is deprecated and "
+                "will be removed in a future version. "
+                "Configure the 'hda' logger with a proper log level instead.",
+                category=DeprecationWarning,
+            )
 
-        if not quiet:
-
-            if debug:
-                level = logging.DEBUG
-            else:
-                level = logging.INFO
-
-            logging.basicConfig(
-                level=level, format="%(asctime)s %(levelname)s %(message)s"
+        if debug is not None:
+            warn(
+                "The 'debug' argument is deprecated and "
+                "will be removed in a future version. "
+                "Configure the 'hda' logger with a proper log level instead.",
+                category=DeprecationWarning,
             )
 
         self.config = config or Configuration()
-        self.quiet = quiet
         self.timeout = timeout
         self.token_timeout = token_timeout
         self.sleep_max = sleep_max
@@ -322,14 +329,13 @@ class Client(object):
         self._token = None
         self._token_creation_time = None
 
-        self.debug(
+        logger.debug(
             "HDA %s",
             dict(
                 url=self.config.url,
                 token_timeout=self.token_timeout,
                 user=self.config.user,
                 password=self.config.password,
-                quiet=self.quiet,
                 verify=self.config.verify,
                 timeout=self.timeout,
                 sleep_max=self.sleep_max,
@@ -357,7 +363,7 @@ class Client(object):
             )
 
         if is_token_expired():
-            self.debug("====== Token expired, renewing")
+            logger.debug("====== Token expired, renewing")
             self._token = self.get_token()
             self._token_creation_time = now
 
@@ -370,11 +376,11 @@ class Client(object):
         session = requests.Session()
         session.auth = (self.config.user, self.config.password)
         full = self.full_url("gettoken")
-        self.debug("===> GET %s", full)
+        logger.debug("===> GET %s", full)
         r = self.robust(session.get)(full)
         r.raise_for_status()
         result = r.json()
-        self.debug("<=== %s", shorten(result))
+        logger.debug("<=== %s", shorten(result))
         session.auth = None
         return result["access_token"]
 
@@ -382,38 +388,22 @@ class Client(object):
         url = "termsaccepted/Copernicus_General_License"
         result = self.get(url)
         if not result["accepted"]:
-            self.debug("TAC not yet accepted")
+            logger.debug("TAC not yet accepted")
             result = self.put({"accepted": True}, url)
-            self.debug("<=== %s", result)
+            logger.debug("<=== %s", result)
 
     @property
     def session(self):
         if self._session is None:
             session = requests.Session()
-            session.mount("ftp://", FTPAdapter(self))
+            session.mount("ftp://", FTPAdapter())
             self._session = session
         self._attach_auth()
         return self._session
 
     def _attach_auth(self):
         self._session.headers = {"Authorization": self.token}
-        self.debug("Token is %s", self.token)
-
-    def info(self, *args, **kwargs):
-        if hasattr(self.logger, "info"):
-            self.logger.info(*args, **kwargs)
-
-    def warning(self, *args, **kwargs):
-        if hasattr(self.logger, "warning"):
-            self.logger.warning(*args, **kwargs)
-
-    def error(self, *args, **kwargs):
-        if hasattr(self.logger, "error"):
-            self.logger.error(*args, **kwargs)
-
-    def debug(self, *args, **kwargs):
-        if hasattr(self.logger, "debug"):
-            self.logger.debug(*args, **kwargs)
+        logger.debug("Token is %s", self.token)
 
     def robust(self, call):
         def wrapped(*args, **kwargs):
@@ -423,7 +413,7 @@ class Client(object):
                     r = call(*args, **kwargs)
                 except requests.exceptions.ConnectionError as e:
                     r = None
-                    self.warning(
+                    logger.warning(
                         "Recovering from connection error [%s], attempt %s of %s",
                         e,
                         tries,
@@ -447,10 +437,10 @@ class Client(object):
                         # the credentials are invalid.
                         # In both cases, we give just another single try.
                         tries = self.retry_max
-                        self.debug("Trying to renew the token")
+                        logger.debug("Trying to renew the token")
                         self.invalidate_token()
 
-                    self.warning(
+                    logger.warning(
                         "Recovering from HTTP error [%s %s], attempt %s of %s",
                         r.status_code,
                         r.reason,
@@ -460,7 +450,7 @@ class Client(object):
 
                 tries += 1
 
-                self.warning("Retrying in %s seconds", self.sleep_max)
+                logger.warning("Retrying in %s seconds", self.sleep_max)
                 time.sleep(self.sleep_max)
 
             return r
@@ -496,31 +486,35 @@ class Client(object):
 
     def get(self, *args):
         full = self.full_url(*args)
-        self.debug("===> GET %s", full)
+        logger.debug("===> GET %s", full)
 
         r = self.robust(self.session.get)(full, timeout=self.timeout)
         r.raise_for_status()
         result = r.json()
-        self.debug("<=== %s", shorten(result))
+        logger.debug("<=== %s", shorten(result))
         return result
 
     def post(self, message, *args):
         full = self.full_url(*args)
-        self.debug("===> POST %s", full)
-        self.debug("===> POST %s", shorten(message))
+        logger.debug("===> POST %s", full)
+        logger.debug("===> POST %s", shorten(message))
 
-        r = self.robust(self.session.post)(full, json=message, timeout=self.timeout)
+        r = self.robust(self.session.post)(
+            full, json=message, timeout=self.timeout
+        )
         r.raise_for_status()
         result = r.json()
-        self.debug("<=== %s", shorten(result))
+        logger.debug("<=== %s", shorten(result))
         return result
 
     def put(self, message, *args):
         full = self.full_url(*args)
-        self.debug("===> PUT %s", full)
-        self.debug("===> PUT %s", shorten(message))
+        logger.debug("===> PUT %s", full)
+        logger.debug("===> PUT %s", shorten(message))
 
-        r = self.robust(self.session.put)(full, json=message, timeout=self.timeout)
+        r = self.robust(self.session.put)(
+            full, json=message, timeout=self.timeout
+        )
         r.raise_for_status()
         return r
 
@@ -541,7 +535,7 @@ class Client(object):
         if download_dir is None or not os.path.exists(download_dir):
             download_dir = "."
 
-        self.info(
+        logger.info(
             "Downloading %s to %s (%s)",
             full,
             filename or "unknown",
@@ -567,7 +561,7 @@ class Client(object):
             try:
                 r.raise_for_status()
 
-                self.debug("Headers: %s", r.headers)
+                logger.debug("Headers: %s", r.headers)
 
                 if filename is None:
                     filename = get_filename(r, target)
@@ -592,22 +586,23 @@ class Client(object):
                                 pbar.update(len(chunk))
 
             except requests.exceptions.ConnectionError as e:
-                self.error("Download interupted: %s" % (e,))
+                logger.error("Download interupted: %s" % (e,))
             finally:
                 r.close()
 
             if total >= size:
                 break
 
-            self.error(
-                "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
+            logger.error(
+                "Download incomplete, downloaded %s byte(s) out of %s"
+                % (total, size)
             )
 
             if isinstance(r, FTPAdapter):
-                self.warning("Ignoring size mismatch")
+                logger.warning("Ignoring size mismatch")
                 return filename
 
-            self.warning("Sleeping %s seconds" % (sleep,))
+            logger.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)
             mode = "ab"
             total = os.path.getsize(filename)
@@ -616,7 +611,7 @@ class Client(object):
                 sleep = self.sleep_max
             headers = {"Range": "bytes=%d-" % total}
             tries += 1
-            self.warning("Resuming download at byte %s" % (total,))
+            logger.warning("Resuming download at byte %s" % (total,))
 
         if total < size:
             raise DownloadSizeError(
@@ -625,13 +620,13 @@ class Client(object):
             )
 
         if total > size:
-            self.warning(
+            logger.warning(
                 "Oops, downloaded %s byte(s), was supposed to be %s (extra %s)"
                 % (total, size, total - size)
             )
 
         elapsed = time.time() - start
         if elapsed:
-            self.info("Download rate %s/s", bytes_to_string(size / elapsed))
+            logger.info("Download rate %s/s", bytes_to_string(size / elapsed))
 
         return filename

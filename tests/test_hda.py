@@ -90,42 +90,6 @@ def test_search_results_slicing():
     assert s[1:].volume == 140
 
 
-class Logger:
-    def info(self, *args, **kwargs):
-        pass
-
-    def debug(self, *args, **kwargs):
-        pass
-
-    def warning(self, *args, **kwargs):
-        pass
-
-    def error(self, *args, **kwargs):
-        pass
-
-
-def test_custom_logger():
-    with patch.object(Logger, "info", return_value=None) as mock_info:
-        c = Client(logger=Logger())
-        c.info("message")
-        mock_info.assert_called_with("message")
-
-    with patch.object(Logger, "debug", return_value=None) as mock_debug:
-        c = Client(logger=Logger())
-        c.debug("message")
-        mock_debug.assert_called_with("message")
-
-    with patch.object(Logger, "warning", return_value=None) as mock_warning:
-        c = Client(logger=Logger())
-        c.warning("message")
-        mock_warning.assert_called_with("message")
-
-    with patch.object(Logger, "error", return_value=None) as mock_error:
-        c = Client(logger=Logger())
-        c.error("message")
-        mock_error.assert_called_with("message")
-
-
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_1():
     c = Client()
@@ -144,8 +108,6 @@ def test_hda_1():
     matches = c.search(r)
     print(matches)
     assert len(matches.results) > 0, matches
-    # Too large to download
-    # matches.download()
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
