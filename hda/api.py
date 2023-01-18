@@ -23,11 +23,13 @@ from __future__ import (
     unicode_literals,
 )
 
+import concurrent.futures
 import json
 import logging
 import os
 import time
 from ftplib import FTP
+from itertools import repeat
 from urllib.parse import urlparse
 from warnings import warn
 
@@ -233,17 +235,22 @@ class SearchResults:
         instance._dataorders_cache = self._dataorders_cache
         return instance
 
+    def _download(self, result, download_dir: str = "."):
+        query = {"jobId": self.job_id, "uri": result["url"]}
+        logger.debug(result)
+        url = self._dataorders_cache.get(result["url"])
+        if url is None:
+            url = DataOrderRequest(self.client).run(query)
+            self._dataorders_cache[result["url"]] = url
+        self.stream(
+            result.get("filename"), result.get("size"), download_dir, *url
+        )
+
     def download(self, download_dir: str = "."):
-        for result in self.results:
-            query = {"jobId": self.job_id, "uri": result["url"]}
-            logger.debug(result)
-            url = self._dataorders_cache.get(result["url"])
-            if url is None:
-                url = DataOrderRequest(self.client).run(query)
-                self._dataorders_cache[result["url"]] = url
-            self.stream(
-                result.get("filename"), result.get("size"), download_dir, *url
-            )
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.client.max_workers
+        ) as executor:
+            executor.map(self._download, self.results, repeat(download_dir))
 
 
 class Configuration:
@@ -301,6 +308,7 @@ class Client(object):
         retry_max=500,
         sleep_max=120,
         progress=True,
+        max_workers=4,
     ):
         if quite is not None:
             warn(
@@ -324,6 +332,7 @@ class Client(object):
         self.sleep_max = sleep_max
         self.retry_max = retry_max
         self.progress = progress
+        self.max_workers = max_workers
 
         self._session = None
         self._token = None
