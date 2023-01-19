@@ -17,7 +17,6 @@
 # does it submit to any jurisdiction.
 
 import os
-from unittest.mock import patch
 
 import pytest
 
