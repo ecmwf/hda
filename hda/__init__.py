@@ -21,9 +21,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import logging
 from logging import NullHandler
 
-logging.getLogger(__name__).addHandler(NullHandler())
-
 from . import api
+
+logging.getLogger(__name__).addHandler(NullHandler())
 
 Client = api.Client
 Configuration = api.Configuration
