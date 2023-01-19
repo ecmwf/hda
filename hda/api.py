@@ -16,12 +16,7 @@
 # granted to it by virtue of its status as an intergovernmental organisation nor
 # does it submit to any jurisdiction.
 
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals,
-)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import concurrent.futures
 import json
@@ -29,7 +24,7 @@ import logging
 import os
 import time
 from ftplib import FTP
-from itertools import repeat
+from itertools import cycle, repeat
 from urllib.parse import urlparse
 from warnings import warn
 
@@ -337,6 +332,7 @@ class Client(object):
         self._session = None
         self._token = None
         self._token_creation_time = None
+        self._tqdm_position = cycle(range(self.max_workers))
 
         logger.debug(
             "HDA %s",
@@ -585,6 +581,7 @@ class Client(object):
                     unit="B",
                     disable=not self.progress,
                     leave=False,
+                    position=next(self._tqdm_position)
                 ) as pbar:
                     pbar.update(total)
                     with open(os.path.join(download_dir, filename), mode) as f:
