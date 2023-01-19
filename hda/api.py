@@ -106,9 +106,7 @@ class FTPRequest:
         self._ftp = FTP(parsed.hostname)
         self._ftp.login(parsed.username, parsed.password)
         self._ftp.voidcmd("TYPE I")
-        self._transfer, self._size = self._ftp.ntransfercmd(
-            "RETR %s" % (parsed.path,)
-        )
+        self._transfer, self._size = self._ftp.ntransfercmd("RETR %s" % (parsed.path,))
         if self._size:
             self.headers["Content-Length"] = str(self._size)
 
@@ -237,9 +235,7 @@ class SearchResults:
         if url is None:
             url = DataOrderRequest(self.client).run(query)
             self._dataorders_cache[result["url"]] = url
-        self.stream(
-            result.get("filename"), result.get("size"), download_dir, *url
-        )
+        self.stream(result.get("filename"), result.get("size"), download_dir, *url)
 
     def download(self, download_dir: str = "."):
         with concurrent.futures.ThreadPoolExecutor(
@@ -257,9 +253,7 @@ class Configuration:
         verify=None,
         path=None,
     ):
-        dotrc = path or os.environ.get(
-            "HDA_RC", os.path.expanduser("~/.hdarc")
-        )
+        dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
 
         if url is None or user is None or password is None:
             try:
@@ -277,9 +271,7 @@ class Configuration:
                 verify = config.get("verify", True)
 
             except FileNotFoundError:
-                raise ConfigurationError(
-                    "Missing configuration file: %s" % (dotrc)
-                )
+                raise ConfigurationError("Missing configuration file: %s" % (dotrc))
 
         if url is None or user is None or password is None:
             raise ConfigurationError(
@@ -504,9 +496,7 @@ class Client(object):
         logger.debug("===> POST %s", full)
         logger.debug("===> POST %s", shorten(message))
 
-        r = self.robust(self.session.post)(
-            full, json=message, timeout=self.timeout
-        )
+        r = self.robust(self.session.post)(full, json=message, timeout=self.timeout)
         r.raise_for_status()
         result = r.json()
         logger.debug("<=== %s", shorten(result))
@@ -517,9 +507,7 @@ class Client(object):
         logger.debug("===> PUT %s", full)
         logger.debug("===> PUT %s", shorten(message))
 
-        r = self.robust(self.session.put)(
-            full, json=message, timeout=self.timeout
-        )
+        r = self.robust(self.session.put)(full, json=message, timeout=self.timeout)
         r.raise_for_status()
         return r
 
@@ -581,7 +569,7 @@ class Client(object):
                     unit="B",
                     disable=not self.progress,
                     leave=False,
-                    position=next(self._tqdm_position)
+                    position=next(self._tqdm_position),
                 ) as pbar:
                     pbar.update(total)
                     with open(os.path.join(download_dir, filename), mode) as f:
@@ -600,8 +588,7 @@ class Client(object):
                 break
 
             logger.error(
-                "Download incomplete, downloaded %s byte(s) out of %s"
-                % (total, size)
+                "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
             )
 
             if isinstance(r, FTPAdapter):
