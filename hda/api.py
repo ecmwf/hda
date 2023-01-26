@@ -31,7 +31,7 @@ from warnings import warn
 import requests
 from tqdm import tqdm
 
-BROKEN_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
+BROKER_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
 
 logger = logging.getLogger(__name__)
 
@@ -127,12 +127,19 @@ class FTPRequest:
 
 
 class FTPAdapter(requests.adapters.BaseAdapter):
+    """A `requests.adapters.BaseAdapter` subclass to handle FTP requests."""
     def send(self, request, *args, **kwargs):
         assert "Range" not in request.headers
         return FTPRequest(request.url)
 
 
 class RequestRunner:
+    """Base class to run an API request.
+
+    :param client: The :class:`hda.api.Client` instance to be used to
+        perform the request.
+    :type client: :class:`hda.api.Client`
+    """
     def __init__(self, client):
         self.get = client.get
         self.post = client.post
@@ -161,7 +168,9 @@ class RequestRunner:
 
 
 class DataRequestRunner(RequestRunner):
-
+    """Runner class for a data request.
+    A data request looks for datasets matching a given query.
+    """
     action = "datarequest"
     id_key = "jobId"
 
@@ -178,21 +187,58 @@ class DataRequestRunner(RequestRunner):
                 yield p
 
     def run(self, query):
+        """Perform a data request with the given query.
+
+        :param query: The query to submit.
+            Refer to the official WEkEO documentation.
+        :type query: json
+
+        :return: A list of results in JSON format.
+        :rtype: list
+        """
         _, job_id = self._run(query)
         return list(self._paginate(job_id)), job_id
 
 
 class DataOrderRequest(RequestRunner):
-
+    """Runner class for a data order request.
+    A data order request is performed in order to retrieve download URLs
+    for a given result returned in the data request phase.
+    """
     action = "dataorder"
     id_key = "orderId"
 
     def run(self, query):
+        """Perform a data order request with the given query.
+
+        :param query: The query to submit.
+            Usually, the :class:`hda.api.Client` will fill up
+            this parameter.
+        :type query: json
+
+        :return: A list of results in JSON format.
+        :rtype: list
+        """
         _, order_id = self._run(query)
         return ("dataorder", "download", order_id)
 
 
 class SearchResults:
+    """A wrapper to a data request response payload.
+
+    It adds aggregated information, like the total size and lenght of the results,
+    and the ability to slice them.
+
+    Please refer to the :doc:`usage` page for examples.
+
+    :param client: The :class:`hda.api.Client` instance to be used to
+        perform the download.
+    :type client: :class:`hda.api.Client`
+    :param results: The results list coming from the data request.
+    :type results: list
+    :param job_id: The job_id returned by the API that identifies the data request.
+    :type job_id: str
+    """
     def __init__(self, client, results, job_id):
         self.client = client
         self.stream = client.stream
@@ -238,6 +284,10 @@ class SearchResults:
         self.stream(result.get("filename"), result.get("size"), download_dir, *url)
 
     def download(self, download_dir: str = "."):
+        """Downloads the results into the given download directory.
+
+        The process is executed concurrently using :py:attr:`hda.api.Client.max_workers` threads.
+        """
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.client.max_workers
         ) as executor:
@@ -245,6 +295,27 @@ class SearchResults:
 
 
 class Configuration:
+    """Service class to wrap up the client configuration.
+
+    The main purpose is to allow multiple ways of injecting basic client parameters.
+
+    Please refer to the :doc:`usage` page for examples.
+
+    :param url: The base API URL. This should be set only for testing purposes.
+        It defaults to :py:attr:`~hda.api.BROKER_URL`
+    :type url: str
+    :param user: The API username to use. A valid WEkEO account is needed.
+    :type user: str
+    :param password: The API password to use. A valid WEkEO account is needed.
+    :type password: str
+    :param verify: Whether to complain for an invalid SSL certificate.
+        Usually only set for testing purposes.
+    :type verify: bool
+    :param path: A path to an optional configuration file that will override the
+        given inputs.
+        Please refer to the :doc:`usage` page for examples.
+    :type path: str
+    """
     def __init__(
         self,
         url=os.environ.get("HDA_URL"),
@@ -273,7 +344,10 @@ class Configuration:
             except FileNotFoundError:
                 raise ConfigurationError("Missing configuration file: %s" % (dotrc))
 
-        if url is None or user is None or password is None:
+        if url is None:
+            url = BROKER_URL
+
+        if user is None or password is None:
             raise ConfigurationError(
                 "Missing/incomplete configuration file: %s" % (dotrc)
             )
@@ -285,11 +359,33 @@ class Configuration:
 
 
 class Client(object):
+    """HTTP client to request data from the WEkEO HDA API.
+
+    :param config: A :class:`hda.api.Configuration` instance.
+        By default `None` is passed, which means that a `$HOME/.hdarc`
+        configuration file will be read.
+    :type config: class:`hda.api.Configuration`
+    :param token_timeout: The authentication token timeout in seconds.
+    :type token_timeout: int, optional
+    :param quiet: Deprecated.
+    :param debug: Deprecated.
+    :param timeout: The timeout of each request in seconds. `None` means no timeout.
+    :type timeout: int, optional
+    :param retry_max: The number of retries on request failure.
+    :type retry_max: int, optional
+    :param sleep_max: The maximum sleep time between failed requests.
+    :type sleep_max: int, optional
+    :param progress: Whether to show a progress bar when the download starts.
+    :type progress: bool, optional
+    :param max_workers: The number of threads used during the download phase.
+    :type max_workers: int, optional
+    """
+
     def __init__(
         self,
         config=None,
         token_timeout=60 * 45,
-        quite=None,
+        quiet=None,
         debug=None,
         timeout=None,
         retry_max=500,
@@ -297,9 +393,9 @@ class Client(object):
         progress=True,
         max_workers=4,
     ):
-        if quite is not None:
+        if quiet is not None:
             warn(
-                "The 'quite' argument is deprecated and "
+                "The 'quiet' argument is deprecated and "
                 "will be removed in a future version. "
                 "Configure the 'hda' logger with a proper log level instead.",
                 category=DeprecationWarning,
@@ -342,7 +438,16 @@ class Client(object):
         )
 
     def full_url(self, *args):
+        """Returns the full URL of the API by appending the `args` to
+        the configured base URL.
 
+        :param args: A list of URL parts that will be joined to the
+            base URL.
+        :type args: list
+
+        :return: The full URL
+        :rtype: str
+        """
         if len(args) == 1 and args[0].split(":")[0] in ("http", "https"):
             return args[0]
 
@@ -351,6 +456,7 @@ class Client(object):
 
     @property
     def token(self):
+        """The access token to access the API."""
         now = int(time.time())
 
         def is_token_expired():
@@ -366,10 +472,16 @@ class Client(object):
 
         return self._token
 
-    def invalidate_token(self):
+    def _invalidate_token(self):
+
         self._token_creation_time = None
 
     def get_token(self):
+        """Requests a new access token using the configured credentials.
+
+        :return: A valid access token.
+        :rtype: str
+        """
         session = requests.Session()
         session.auth = (self.config.user, self.config.password)
         full = self.full_url("gettoken")
@@ -382,6 +494,8 @@ class Client(object):
         return result["access_token"]
 
     def accept_tac(self):
+        """Implicitly accept the terms and conditions of the service.
+        """
         url = "termsaccepted/Copernicus_General_License"
         result = self.get(url)
         if not result["accepted"]:
@@ -391,6 +505,7 @@ class Client(object):
 
     @property
     def session(self):
+        """The `requests` library session object, with the attached authentication."""
         if self._session is None:
             session = requests.Session()
             session.mount("ftp://", FTPAdapter())
@@ -403,6 +518,15 @@ class Client(object):
         logger.debug("Token is %s", self.token)
 
     def robust(self, call):
+        """A robust way of submitting the `call` to the API by retrying it in case of failure.
+        An exponential-backoff strategy is used to delay subsequent requests up
+        to the `hda.Client.sleep_max` value.
+
+        :param call: The request call function, like `get`, `post` or `put`.
+        :type call: callable
+
+        :return: The response object.
+        """
         def wrapped(*args, **kwargs):
             tries = 0
             while tries < self.retry_max:
@@ -435,7 +559,7 @@ class Client(object):
                         # In both cases, we give just another single try.
                         tries = self.retry_max
                         logger.debug("Trying to renew the token")
-                        self.invalidate_token()
+                        self._invalidate_token()
 
                     logger.warning(
                         "Recovering from HTTP error [%s %s], attempt %s of %s",
@@ -455,6 +579,13 @@ class Client(object):
         return wrapped
 
     def search(self, query):
+        """Submits a search request with the given query.
+
+        :param query: The JSON object representing the query.
+        :type query: json
+
+        :return: An :class:`hda.api.SearchResults` instance
+        """
         self.accept_tac()
         return SearchResults(self, *DataRequestRunner(self).run(query))
 
@@ -469,12 +600,27 @@ class Client(object):
                 yield p
 
     def datasets(self):
+        """Returns the full list of available datasets.
+        Each element of the list is a JSON object that includes
+        the abstract, the dataset ID and other properties.
+        """
         return list(self._datasets())
 
     def dataset(self, dataset_id):
+        """Returns a JSON object that includes the abstract,
+        the datasetId and other properties of the given dataset.
+
+        :param dataset_id: The dataset ID
+        :type dataset_id: str
+        """
         return self.get("datasets", dataset_id)
 
     def metadata(self, dataset_id):
+        """Returns the metadata object for the given dataset.
+
+        :param dataset_id: The dataset ID
+        :type dataset_id: str
+        """
         response = self.get("querymetadata", dataset_id)
         # Remove extra information only useful on the WEkEO UI
         if "constraints" in response:
@@ -482,6 +628,13 @@ class Client(object):
         return response
 
     def get(self, *args):
+        """Submits a GET request.
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
         full = self.full_url(*args)
         logger.debug("===> GET %s", full)
 
@@ -492,6 +645,16 @@ class Client(object):
         return result
 
     def post(self, message, *args):
+        """Submits a POST request.
+
+        :param message: The POST payload, in JSON format.
+        :type message: json
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
         full = self.full_url(*args)
         logger.debug("===> POST %s", full)
         logger.debug("===> POST %s", shorten(message))
@@ -503,6 +666,16 @@ class Client(object):
         return result
 
     def put(self, message, *args):
+        """Submits a PUT request.
+
+        :param message: The PUT payload, in JSON format.
+        :type message: json
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
         full = self.full_url(*args)
         logger.debug("===> PUT %s", full)
         logger.debug("===> PUT %s", shorten(message))
@@ -512,6 +685,19 @@ class Client(object):
         return r
 
     def stream(self, target, size, download_dir, *args):
+        """Streams the given target URL into the specified download directory.
+        Usually, this method is not called directly but through the
+        :py:meth:`~hda.api.Client.download` one.
+
+        :param target: The target of the resource to download.
+            Typically it is the last part of the full URL.
+        :type target: str
+        :param size: The expected size of the resource.
+        :type size: int
+        :param download_dir: The directory into which the resource must be downloaded.
+        :type download_dir: str
+        :param args: A list of URL parts to be joined to the base URL.
+        """
         full = self.full_url(*args)
 
         filename = target

@@ -27,7 +27,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from hda import Client  # noqa
 
-c = Client(debug=True)
+c = Client()
 
 queries = sys.argv[1:]
 
