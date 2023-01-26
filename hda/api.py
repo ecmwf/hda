@@ -128,6 +128,7 @@ class FTPRequest:
 
 class FTPAdapter(requests.adapters.BaseAdapter):
     """A `requests.adapters.BaseAdapter` subclass to handle FTP requests."""
+
     def send(self, request, *args, **kwargs):
         assert "Range" not in request.headers
         return FTPRequest(request.url)
@@ -140,6 +141,7 @@ class RequestRunner:
         perform the request.
     :type client: :class:`hda.api.Client`
     """
+
     def __init__(self, client):
         self.get = client.get
         self.post = client.post
@@ -171,6 +173,7 @@ class DataRequestRunner(RequestRunner):
     """Runner class for a data request.
     A data request looks for datasets matching a given query.
     """
+
     action = "datarequest"
     id_key = "jobId"
 
@@ -205,6 +208,7 @@ class DataOrderRequest(RequestRunner):
     A data order request is performed in order to retrieve download URLs
     for a given result returned in the data request phase.
     """
+
     action = "dataorder"
     id_key = "orderId"
 
@@ -239,6 +243,7 @@ class SearchResults:
     :param job_id: The job_id returned by the API that identifies the data request.
     :type job_id: str
     """
+
     def __init__(self, client, results, job_id):
         self.client = client
         self.stream = client.stream
@@ -316,6 +321,7 @@ class Configuration:
         Please refer to the :doc:`usage` page for examples.
     :type path: str
     """
+
     def __init__(
         self,
         url=os.environ.get("HDA_URL"),
@@ -494,8 +500,7 @@ class Client(object):
         return result["access_token"]
 
     def accept_tac(self):
-        """Implicitly accept the terms and conditions of the service.
-        """
+        """Implicitly accept the terms and conditions of the service."""
         url = "termsaccepted/Copernicus_General_License"
         result = self.get(url)
         if not result["accepted"]:
@@ -527,6 +532,7 @@ class Client(object):
 
         :return: The response object.
         """
+
         def wrapped(*args, **kwargs):
             tries = 0
             while tries < self.retry_max:
