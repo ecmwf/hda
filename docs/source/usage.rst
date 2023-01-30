@@ -83,7 +83,7 @@ This behaviour can be easily customized by slicing the `matches` object:
 Concurrent downloads
 ~~~~~~~~~~~~~~~~~~~~
 
-By default, the download method will use 4 threads. That means that up to four downloads can run at the same time.
+By default, the download method will use 2 threads. That means that up to four downloads can run at the same time.
 
 Depending on the number of downloads, this can speed up the process, especially if the files are large and the bandwidth can sustain parallel downloads.
 

@@ -397,7 +397,7 @@ class Client(object):
         retry_max=500,
         sleep_max=120,
         progress=True,
-        max_workers=4,
+        max_workers=2,
     ):
         if quiet is not None:
             warn(
