@@ -18,19 +18,26 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import concurrent.futures
 import json
 import logging
 import os
 import time
 from ftplib import FTP
+from itertools import cycle, repeat
 from urllib.parse import urlparse
+from warnings import warn
 
 import requests
 from tqdm import tqdm
 
+BROKER_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
+
+logger = logging.getLogger(__name__)
+
 
 def bytes_to_string(n):
-    u = ["", "K", "M", "G", "T", "P"]
+    u = ["", "KB", "MB", "GB", "TB", "PB"]
     i = 0
     while n >= 1024:
         n /= 1024.0
@@ -44,7 +51,7 @@ def read_config(path):
         for line in f.readlines():
             if ":" in line:
                 k, v = line.strip().split(":", 1)
-                if k in ("url", "user", "password", "token", "verify"):
+                if k in ("url", "user", "password", "verify"):
                     config[k] = v.strip()
     return config
 
@@ -66,6 +73,22 @@ def get_filename(response, fallback):
     return fallback
 
 
+class HDAError(Exception):
+    pass
+
+
+class ConfigurationError(HDAError):
+    pass
+
+
+class RequestFailedError(HDAError):
+    pass
+
+
+class DownloadSizeError(HDAError):
+    pass
+
+
 class FTPRequest:
 
     history = None
@@ -75,10 +98,9 @@ class FTPRequest:
     headers = dict()
     raw = None
 
-    def __init__(self, url, logger):
+    def __init__(self, url):
 
-        self._logger = logger
-        self._logger.warning("Downloading from FTP url: %s", url)
+        logger.warning("Downloading from FTP url: %s", url)
 
         parsed = urlparse(url)
         self._ftp = FTP(parsed.hostname)
@@ -89,6 +111,7 @@ class FTPRequest:
             self.headers["Content-Length"] = str(self._size)
 
     def raise_for_status(self):
+        """Don't deal with FTP requests code.s"""
         pass
 
     def close(self):
@@ -103,143 +126,218 @@ class FTPRequest:
             yield chunk
 
 
-class FTPAdapter:
-    def __init__(self, logger):
-        self.logger = logger
+class FTPAdapter(requests.adapters.BaseAdapter):
+    """A `requests.adapters.BaseAdapter` subclass to handle FTP requests."""
 
     def send(self, request, *args, **kwargs):
         assert "Range" not in request.headers
-        return FTPRequest(request.url, self.logger)
+        return FTPRequest(request.url)
 
 
 class RequestRunner:
+    """Base class to run an API request.
+
+    :param client: The :class:`hda.api.Client` instance to be used to
+        perform the request.
+    :type client: :class:`hda.api.Client`
+    """
+
     def __init__(self, client):
         self.get = client.get
         self.post = client.post
-        self.debug = client.debug
         self.sleep_max = client.sleep_max
 
     def _run(self, query):
         result = self.post(query, self.action)
-        jobId = result[self.idKey]
+        job_id = result[self.id_key]
 
         status = result["status"]
 
         sleep = 1
         while status != "completed":
             if status == "failed":
-                raise Exception(result["message"])
+                raise RequestFailedError(result["message"])
             assert status in ["started", "running"]
-            self.debug("Sleeping %s seconds", sleep)
+            logger.debug("Sleeping %s seconds", sleep)
             time.sleep(sleep)
-            result = self.get(self.action, "status", jobId)
+            result = self.get(self.action, "status", job_id)
             status = result["status"]
             sleep *= 1.1
             if sleep > self.sleep_max:
                 sleep = self.sleep_max
 
-        return result, jobId
+        return result, job_id
 
 
 class DataRequestRunner(RequestRunner):
+    """Runner class for a data request.
+    A data request looks for datasets matching a given query.
+    """
 
     action = "datarequest"
-    idKey = "jobId"
+    id_key = "jobId"
 
-    def _paginate(self, jobId):
-        result = self.get(self.action, "jobs", jobId, "result")
+    def _paginate(self, job_id):
+        result = self.get(self.action, "jobs", job_id, "result")
         page = result
         for p in page["content"]:
             yield p
 
         while page.get("nextPage"):
-            self.debug(json.dumps(page, indent=4))
+            logger.debug(json.dumps(page, indent=4))
             page = self.get(page["nextPage"])
             for p in page["content"]:
                 yield p
 
     def run(self, query):
-        _, jobId = self._run(query)
-        return list(self._paginate(jobId)), jobId
+        """Perform a data request with the given query.
+
+        :param query: The query to submit.
+            Refer to the official WEkEO documentation.
+        :type query: json
+
+        :return: A list of results in JSON format.
+        :rtype: list
+        """
+        _, job_id = self._run(query)
+        return list(self._paginate(job_id)), job_id
 
 
 class DataOrderRequest(RequestRunner):
+    """Runner class for a data order request.
+    A data order request is performed in order to retrieve download URLs
+    for a given result returned in the data request phase.
+    """
 
     action = "dataorder"
-    idKey = "orderId"
+    id_key = "orderId"
 
     def run(self, query):
-        _, orderId = self._run(query)
-        return ("dataorder", "download", orderId)
+        """Perform a data order request with the given query.
+
+        :param query: The query to submit.
+            Usually, the :class:`hda.api.Client` will fill up
+            this parameter.
+        :type query: json
+
+        :return: A list of results in JSON format.
+        :rtype: list
+        """
+        _, order_id = self._run(query)
+        return ("dataorder", "download", order_id)
 
 
 class SearchResults:
-    def __init__(self, client, results, jobId):
+    """A wrapper to a data request response payload.
+
+    It adds aggregated information, like the total size and lenght of the results,
+    and the ability to slice them.
+
+    Please refer to the :doc:`usage` page for examples.
+
+    :param client: The :class:`hda.api.Client` instance to be used to
+        perform the download.
+    :type client: :class:`hda.api.Client`
+    :param results: The results list coming from the data request.
+    :type results: list
+    :param job_id: The job_id returned by the API that identifies the data request.
+    :type job_id: str
+    """
+
+    def __init__(self, client, results, job_id):
         self.client = client
-        self.debug = client.debug
         self.stream = client.stream
         self.results = results
-        self.jobId = jobId
+        self.job_id = job_id
         self.volume = sum(r.get("size", 0) for r in results)
+        self._dataorders_cache = {}
 
     def __repr__(self):
         return "SearchResults[items=%s,volume=%s,jobId=%s]" % (
-            len(self.results),
+            len(self),
             bytes_to_string(self.volume),
-            self.jobId,
+            self.job_id,
         )
 
-    def download(self, download_dir: str = "."):
-        for result in self.results:
-            query = {"jobId": self.jobId, "uri": result["url"]}
-            self.debug(result)
+    def __len__(self):
+        return len(self.results)
+
+    def __getitem__(self, index):
+        if isinstance(index, int):
+            # This will re-raise any possible IndexError,
+            # since slicing is more permissive
+            self.results[index]
+
+            if index != -1:
+                index = slice(index, index + 1, None)
+            else:
+                index = slice(index, None, None)
+
+        instance = self.__class__(
+            client=self.client, results=self.results[index], job_id=self.job_id
+        )
+        instance._dataorders_cache = self._dataorders_cache
+        return instance
+
+    def _download(self, result, download_dir: str = "."):
+        query = {"jobId": self.job_id, "uri": result["url"]}
+        logger.debug(result)
+        url = self._dataorders_cache.get(result["url"])
+        if url is None:
             url = DataOrderRequest(self.client).run(query)
-            self.stream(result.get("filename"), result.get("size"), download_dir, *url)
+            self._dataorders_cache[result["url"]] = url
+        self.stream(result.get("filename"), result.get("size"), download_dir, *url)
+
+    def download(self, download_dir: str = "."):
+        """Downloads the results into the given download directory.
+
+        The process is executed concurrently using :py:attr:`hda.api.Client.max_workers` threads.
+        """
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.client.max_workers
+        ) as executor:
+            executor.map(self._download, self.results, repeat(download_dir))
 
 
-class Client(object):
+class Configuration:
+    """Service class to wrap up the client configuration.
 
-    logger = logging.getLogger("hda")
+    The main purpose is to allow multiple ways of injecting basic client parameters.
+
+    Please refer to the :doc:`usage` page for examples.
+
+    :param url: The base API URL. This should be set only for testing purposes.
+        It defaults to :py:attr:`~hda.api.BROKER_URL`
+    :type url: str
+    :param user: The API username to use. A valid WEkEO account is needed.
+    :type user: str
+    :param password: The API password to use. A valid WEkEO account is needed.
+    :type password: str
+    :param verify: Whether to complain for an invalid SSL certificate.
+        Usually only set for testing purposes.
+    :type verify: bool
+    :param path: A path to an optional configuration file that will override the
+        given inputs.
+        Please refer to the :doc:`usage` page for examples.
+    :type path: str
+    """
 
     def __init__(
         self,
         url=os.environ.get("HDA_URL"),
         user=os.environ.get("HDA_USER"),
         password=os.environ.get("HDA_PASSWORD"),
-        token=os.environ.get("HDA_TOKEN"),
-        token_timeout=60 * 45,
-        quiet=False,
-        debug=False,
         verify=None,
-        timeout=None,
-        retry_max=500,
-        sleep_max=120,
-        info_callback=None,
-        warning_callback=None,
-        error_callback=None,
-        debug_callback=None,
-        progress=True,
+        path=None,
     ):
+        dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
 
-        if not quiet:
-
-            if debug:
-                level = logging.DEBUG
-            else:
-                level = logging.INFO
-
-            logging.basicConfig(
-                level=level, format="%(asctime)s %(levelname)s %(message)s"
-            )
-
-        dotrc = os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
-
-        if url is None or (token is None and user is None and password is None):
-            if os.path.exists(dotrc):
+        if url is None or user is None or password is None:
+            try:
                 config = read_config(dotrc)
 
-                if token is None:
-                    token = config.get("token")
+                if url is None:
+                    url = config.get("url")
 
                 if user is None:
                     user = config.get("user")
@@ -247,46 +345,97 @@ class Client(object):
                 if password is None:
                     password = config.get("password")
 
-                if url is None:
-                    url = config.get("url")
+                verify = config.get("verify", True)
 
-                if verify is None:
-                    verify = int(config.get("verify", 1))
+            except FileNotFoundError:
+                raise ConfigurationError("Missing configuration file: %s" % (dotrc))
 
-        if url is None or (token is None and user is None):
-            raise Exception("Missing/incomplete configuration file: %s" % (dotrc))
+        if url is None:
+            url = BROKER_URL
+
+        if user is None or password is None:
+            raise ConfigurationError(
+                "Missing/incomplete configuration file: %s" % (dotrc)
+            )
 
         self.url = url
         self.user = user
         self.password = password
+        self.verify = True if verify is None else verify
 
-        self.quiet = quiet
-        self.verify = True if verify else False
+
+class Client(object):
+    """HTTP client to request data from the WEkEO HDA API.
+
+    :param config: A :class:`hda.api.Configuration` instance.
+        By default `None` is passed, which means that a `$HOME/.hdarc`
+        configuration file will be read.
+    :type config: class:`hda.api.Configuration`
+    :param token_timeout: The authentication token timeout in seconds.
+    :type token_timeout: int, optional
+    :param quiet: Deprecated.
+    :param debug: Deprecated.
+    :param timeout: The timeout of each request in seconds. `None` means no timeout.
+    :type timeout: int, optional
+    :param retry_max: The number of retries on request failure.
+    :type retry_max: int, optional
+    :param sleep_max: The maximum sleep time between failed requests.
+    :type sleep_max: int, optional
+    :param progress: Whether to show a progress bar when the download starts.
+    :type progress: bool, optional
+    :param max_workers: The number of threads used during the download phase.
+    :type max_workers: int, optional
+    """
+
+    def __init__(
+        self,
+        config=None,
+        token_timeout=60 * 45,
+        quiet=None,
+        debug=None,
+        timeout=None,
+        retry_max=500,
+        sleep_max=120,
+        progress=True,
+        max_workers=2,
+    ):
+        if quiet is not None:
+            warn(
+                "The 'quiet' argument is deprecated and "
+                "will be removed in a future version. "
+                "Configure the 'hda' logger with a proper log level instead.",
+                category=DeprecationWarning,
+            )
+
+        if debug is not None:
+            warn(
+                "The 'debug' argument is deprecated and "
+                "will be removed in a future version. "
+                "Configure the 'hda' logger with a proper log level instead.",
+                category=DeprecationWarning,
+            )
+
+        self.config = config or Configuration()
         self.timeout = timeout
         self.token_timeout = token_timeout
         self.sleep_max = sleep_max
         self.retry_max = retry_max
         self.progress = progress
-
-        self.debug_callback = debug_callback
-        self.warning_callback = warning_callback
-        self.info_callback = info_callback
-        self.error_callback = error_callback
+        self.max_workers = max_workers
 
         self._session = None
         self._token = None
         self._token_creation_time = None
+        self._tqdm_position = cycle(range(self.max_workers))
 
-        self.debug(
+        logger.debug(
             "HDA %s",
             dict(
-                url=self.url,
-                token=self.token,
+                url=self.config.url,
                 token_timeout=self.token_timeout,
-                user=self.user,
-                password=self.password,
-                quiet=self.quiet,
-                verify=self.verify,
+                user=self.config.user,
+                password=self.config.password,
+                verify=self.config.verify,
                 timeout=self.timeout,
                 sleep_max=self.sleep_max,
                 retry_max=self.retry_max,
@@ -295,15 +444,25 @@ class Client(object):
         )
 
     def full_url(self, *args):
+        """Returns the full URL of the API by appending the `args` to
+        the configured base URL.
 
+        :param args: A list of URL parts that will be joined to the
+            base URL.
+        :type args: list
+
+        :return: The full URL
+        :rtype: str
+        """
         if len(args) == 1 and args[0].split(":")[0] in ("http", "https"):
             return args[0]
 
-        full = "/".join([str(x) for x in [self.url] + list(args)])
+        full = "/".join([str(x) for x in [self.config.url] + list(args)])
         return full
 
     @property
     def token(self):
+        """The access token to access the API."""
         now = int(time.time())
 
         def is_token_expired():
@@ -313,87 +472,66 @@ class Client(object):
             )
 
         if is_token_expired():
-            self.debug("====== Token expired, renewing")
+            logger.debug("====== Token expired, renewing")
             self._token = self.get_token()
             self._token_creation_time = now
 
         return self._token
 
-    def invalidate_token(self):
+    def _invalidate_token(self):
+
         self._token_creation_time = None
 
     def get_token(self):
+        """Requests a new access token using the configured credentials.
+
+        :return: A valid access token.
+        :rtype: str
+        """
         session = requests.Session()
-        session.auth = (self.user, self.password)
+        session.auth = (self.config.user, self.config.password)
         full = self.full_url("gettoken")
-        self.debug("===> GET %s", full)
+        logger.debug("===> GET %s", full)
         r = self.robust(session.get)(full)
         r.raise_for_status()
         result = r.json()
-        self.debug("<=== %s", shorten(result))
+        logger.debug("<=== %s", shorten(result))
         session.auth = None
         return result["access_token"]
 
     def accept_tac(self):
+        """Implicitly accept the terms and conditions of the service."""
         url = "termsaccepted/Copernicus_General_License"
         result = self.get(url)
         if not result["accepted"]:
-            self.debug("TAC not yet accepted")
+            logger.debug("TAC not yet accepted")
             result = self.put({"accepted": True}, url)
-            self.debug("<=== %s", result)
+            logger.debug("<=== %s", result)
 
     @property
     def session(self):
+        """The `requests` library session object, with the attached authentication."""
         if self._session is None:
             session = requests.Session()
-            session.mount("ftp://", FTPAdapter(self))
+            session.mount("ftp://", FTPAdapter())
             self._session = session
         self._attach_auth()
         return self._session
 
     def _attach_auth(self):
         self._session.headers = {"Authorization": self.token}
-        self.debug("Token is %s", self.token)
-
-    def info(self, *args, **kwargs):
-        if self.info_callback:
-            self.info_callback(*args, **kwargs)
-        else:
-            self.logger.info(*args, **kwargs)
-
-    def warning(self, *args, **kwargs):
-        if self.warning_callback:
-            self.warning_callback(*args, **kwargs)
-        else:
-            self.logger.warning(*args, **kwargs)
-
-    def error(self, *args, **kwargs):
-        if self.error_callback:
-            self.error_callback(*args, **kwargs)
-        else:
-            self.logger.error(*args, **kwargs)
-
-    def debug(self, *args, **kwargs):
-        if self.debug_callback:
-            self.debug_callback(*args, **kwargs)
-        else:
-            self.logger.debug(*args, **kwargs)
+        logger.debug("Token is %s", self.token)
 
     def robust(self, call):
-        def retriable(code):
+        """A robust way of submitting the `call` to the API by retrying it in case of failure.
+        An exponential-backoff strategy is used to delay subsequent requests up
+        to the `hda.Client.sleep_max` value.
 
-            if code in [
-                requests.codes.internal_server_error,
-                requests.codes.bad_gateway,
-                requests.codes.service_unavailable,
-                requests.codes.gateway_timeout,
-                requests.codes.too_many_requests,
-                requests.codes.request_timeout,
-                requests.codes.forbidden,
-            ]:
-                return True
+        :param call: The request call function, like `get`, `post` or `put`.
+        :type call: callable
 
-            return False
+        :return: The response object.
+        """
 
         def wrapped(*args, **kwargs):
             tries = 0
@@ -402,24 +540,35 @@ class Client(object):
                     r = call(*args, **kwargs)
                 except requests.exceptions.ConnectionError as e:
                     r = None
-                    self.warning(
-                        "Recovering from connection error [%s], attemx ps %s of %s",
+                    logger.warning(
+                        "Recovering from connection error [%s], attempt %s of %s",
                         e,
                         tries,
                         self.retry_max,
                     )
 
                 if r is not None:
-                    if not retriable(r.status_code):
+                    if r.status_code not in [
+                        requests.codes.internal_server_error,
+                        requests.codes.bad_gateway,
+                        requests.codes.service_unavailable,
+                        requests.codes.gateway_timeout,
+                        requests.codes.too_many_requests,
+                        requests.codes.request_timeout,
+                        requests.codes.forbidden,
+                    ]:
                         return r
 
                     if r.status_code == requests.codes.forbidden:
-                        self.debug("Trying to renew token")
-                        self.invalidate_token()
-                        self._attach_auth()
+                        # If the request is forbidden, either the token is expired or
+                        # the credentials are invalid.
+                        # In both cases, we give just another single try.
+                        tries = self.retry_max
+                        logger.debug("Trying to renew the token")
+                        self._invalidate_token()
 
-                    self.warning(
-                        "Recovering from HTTP error [%s %s], attemps %s of %s",
+                    logger.warning(
+                        "Recovering from HTTP error [%s %s], attempt %s of %s",
                         r.status_code,
                         r.reason,
                         tries,
@@ -428,12 +577,21 @@ class Client(object):
 
                 tries += 1
 
-                self.warning("Retrying in %s seconds", self.sleep_max)
+                logger.warning("Retrying in %s seconds", self.sleep_max)
                 time.sleep(self.sleep_max)
+
+            return r
 
         return wrapped
 
     def search(self, query):
+        """Submits a search request with the given query.
+
+        :param query: The JSON object representing the query.
+        :type query: json
+
+        :return: An :class:`hda.api.SearchResults` instance
+        """
         self.accept_tac()
         return SearchResults(self, *DataRequestRunner(self).run(query))
 
@@ -448,55 +606,110 @@ class Client(object):
                 yield p
 
     def datasets(self):
+        """Returns the full list of available datasets.
+        Each element of the list is a JSON object that includes
+        the abstract, the dataset ID and other properties.
+        """
         return list(self._datasets())
 
-    def dataset(self, datasetId):
-        return self.get("datasets", datasetId)
+    def dataset(self, dataset_id):
+        """Returns a JSON object that includes the abstract,
+        the datasetId and other properties of the given dataset.
 
-    def metadata(self, datasetId):
-        response = self.get("querymetadata", datasetId)
+        :param dataset_id: The dataset ID
+        :type dataset_id: str
+        """
+        return self.get("datasets", dataset_id)
+
+    def metadata(self, dataset_id):
+        """Returns the metadata object for the given dataset.
+
+        :param dataset_id: The dataset ID
+        :type dataset_id: str
+        """
+        response = self.get("querymetadata", dataset_id)
         # Remove extra information only useful on the WEkEO UI
         if "constraints" in response:
             del response["constraints"]
         return response
 
     def get(self, *args):
+        """Submits a GET request.
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
         full = self.full_url(*args)
-        self.debug("===> GET %s", full)
+        logger.debug("===> GET %s", full)
 
         r = self.robust(self.session.get)(full, timeout=self.timeout)
         r.raise_for_status()
         result = r.json()
-        self.debug("<=== %s", shorten(result))
+        logger.debug("<=== %s", shorten(result))
         return result
 
     def post(self, message, *args):
+        """Submits a POST request.
+
+        :param message: The POST payload, in JSON format.
+        :type message: json
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
         full = self.full_url(*args)
-        self.debug("===> POST %s", full)
-        self.debug("===> POST %s", shorten(message))
+        logger.debug("===> POST %s", full)
+        logger.debug("===> POST %s", shorten(message))
 
         r = self.robust(self.session.post)(full, json=message, timeout=self.timeout)
         r.raise_for_status()
         result = r.json()
-        self.debug("<=== %s", shorten(result))
+        logger.debug("<=== %s", shorten(result))
         return result
 
     def put(self, message, *args):
+        """Submits a PUT request.
+
+        :param message: The PUT payload, in JSON format.
+        :type message: json
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
         full = self.full_url(*args)
-        self.debug("===> PUT %s", full)
-        self.debug("===> PUT %s", shorten(message))
+        logger.debug("===> PUT %s", full)
+        logger.debug("===> PUT %s", shorten(message))
 
         r = self.robust(self.session.put)(full, json=message, timeout=self.timeout)
         r.raise_for_status()
         return r
 
     def stream(self, target, size, download_dir, *args):
+        """Streams the given target URL into the specified download directory.
+        Usually, this method is not called directly but through the
+        :py:meth:`~hda.api.Client.download` one.
+
+        :param target: The target of the resource to download.
+            Typically it is the last part of the full URL.
+        :type target: str
+        :param size: The expected size of the resource.
+        :type size: int
+        :param download_dir: The directory into which the resource must be downloaded.
+        :type download_dir: str
+        :param args: A list of URL parts to be joined to the base URL.
+        """
         full = self.full_url(*args)
 
         filename = target
         if target.startswith("&"):
             # For a large number of datasets (mostly from Mercator Ocean),
-            # the provided filename starts with aportion of a query string:
+            # the provided filename starts with a portion of a query string:
             # eg: &service=SST_GLO_SST_L4_REP_OBSERVATIONS_010_011-TDS...
             # It this case, the file name should be retrieved from the
             # `Location` header of the redirect response.
@@ -507,7 +720,7 @@ class Client(object):
         if download_dir is None or not os.path.exists(download_dir):
             download_dir = "."
 
-        self.info(
+        logger.info(
             "Downloading %s to %s (%s)",
             full,
             filename or "unknown",
@@ -526,14 +739,14 @@ class Client(object):
             r = self.robust(self.session.get)(
                 full,
                 stream=True,
-                verify=self.verify,
+                verify=self.config.verify,
                 headers=headers,
                 timeout=self.timeout,
             )
             try:
                 r.raise_for_status()
 
-                self.debug("Headers: %s", r.headers)
+                logger.debug("Headers: %s", r.headers)
 
                 if filename is None:
                     filename = get_filename(r, target)
@@ -548,6 +761,7 @@ class Client(object):
                     unit="B",
                     disable=not self.progress,
                     leave=False,
+                    position=next(self._tqdm_position),
                 ) as pbar:
                     pbar.update(total)
                     with open(os.path.join(download_dir, filename), mode) as f:
@@ -558,22 +772,22 @@ class Client(object):
                                 pbar.update(len(chunk))
 
             except requests.exceptions.ConnectionError as e:
-                self.error("Download interupted: %s" % (e,))
+                logger.error("Download interupted: %s" % (e,))
             finally:
                 r.close()
 
             if total >= size:
                 break
 
-            self.error(
+            logger.error(
                 "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
             )
 
             if isinstance(r, FTPAdapter):
-                self.warning("Ignoring size mismatch")
+                logger.warning("Ignoring size mismatch")
                 return filename
 
-            self.warning("Sleeping %s seconds" % (sleep,))
+            logger.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)
             mode = "ab"
             total = os.path.getsize(filename)
@@ -582,22 +796,22 @@ class Client(object):
                 sleep = self.sleep_max
             headers = {"Range": "bytes=%d-" % total}
             tries += 1
-            self.warning("Resuming download at byte %s" % (total,))
+            logger.warning("Resuming download at byte %s" % (total,))
 
         if total < size:
-            raise Exception(
+            raise DownloadSizeError(
                 "Download failed: downloaded %s byte(s) out of %s (missing %s)"
                 % (total, size, size - total)
             )
 
         if total > size:
-            self.warning(
+            logger.warning(
                 "Oops, downloaded %s byte(s), was supposed to be %s (extra %s)"
                 % (total, size, total - size)
             )
 
         elapsed = time.time() - start
         if elapsed:
-            self.info("Download rate %s/s", bytes_to_string(size / elapsed))
+            logger.info("Download rate %s/s", bytes_to_string(size / elapsed))
 
         return filename

@@ -18,6 +18,12 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import logging
+from logging import NullHandler
+
 from . import api
 
+logging.getLogger(__name__).addHandler(NullHandler())
+
 Client = api.Client
+Configuration = api.Configuration

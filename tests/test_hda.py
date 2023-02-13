@@ -20,52 +20,98 @@ import os
 
 import pytest
 
-from hda import Client
+from hda import Client, Configuration
+from hda.api import SearchResults
 
 NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
     "HDA_USER" not in os.environ or "HDA_PASSWORD" not in os.environ
 )
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+
+CUSTOM_HDRRC = os.path.join(BASE_DIR, "tests/custom_config.txt")
+
+
+@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
+def test_custom_url_config():
+    config = Configuration(url="TEST")
+    c = Client(config=config)
+    assert c.config.url == "TEST"
+
+
+@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
+def test_custom_user_config():
+    config = Configuration(user="TEST")
+    c = Client(config=config)
+    assert c.config.user == "TEST"
+
+
+@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
+def test_custom_password_config():
+    config = Configuration(password="TEST")
+    c = Client(config=config)
+    assert c.config.password == "TEST"
+
+
+@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
+def test_custom_path_config():
+    config = Configuration(path=CUSTOM_HDRRC)
+    c = Client(config=config)
+    assert c.config.url == "TESTURL"
+    assert c.config.user == "TESTUSER"
+    assert c.config.password == "TESTPASSWORD"
+
+
+@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
+def test_mixed_config():
+    config = Configuration(user="TU", password="TP", path=CUSTOM_HDRRC)
+    c = Client(config=config)
+    assert c.config.url == "TESTURL"
+    assert c.config.user == "TU"
+    assert c.config.password == "TP"
+
+
+def test_search_results_slicing():
+    r = [
+        {"id": 0, "size": 10},
+        {"id": 1, "size": 20},
+        {"id": 2, "size": 30},
+        {"id": 3, "size": 40},
+        {"id": 4, "size": 50},
+    ]
+    s = SearchResults(Client(), r, None)
+    assert len(s[0]) == 1
+    assert s[0].results[0] == r[0]
+    assert s[0].volume == 10
+    assert len(s[-1]) == 1
+    assert s[-1].results[0] == r[-1]
+    assert s[-1].volume == 50
+    assert len(s[:]) == len(r)
+    assert s[1:].volume == 140
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_1():
-    c = Client(url="https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker")
+    c = Client()
 
     r = {
-        "datasetId": "EO:EUM:DAT:SENTINEL-3:OL_1_EFR___",
-        "boundingBoxValues": [
-            {
-                "name": "bbox",
-                "bbox": [
-                    1.2653132076552462,
-                    43.50759094045819,
-                    1.575030022744999,
-                    43.711525020845585,
-                ],
-            }
-        ],
+        "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
         "dateRangeSelectValues": [
             {
-                "name": "end",
-                "start": "2022-07-03T00:00:00.000Z",
-                "end": "2022-07-04T00:00:00.000Z",
+                "name": "dtrange",
+                "start": "2020-04-11T00:00:00.000Z",
+                "end": "2020-05-21T00:00:00.000Z",
             }
         ],
-        "stringChoiceValues": [
-            {"name": "platformname", "value": "Sentinel-3"},
-            {"name": "producttype", "value": "OL_1_EFR___"},
-        ],
     }
+
     matches = c.search(r)
     print(matches)
     assert len(matches.results) > 0, matches
-    # Too large to download
-    # matches.download()
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_2():
-    c = Client(url="https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker")
+    c = Client()
 
     r = {
         "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
