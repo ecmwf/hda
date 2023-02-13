@@ -106,7 +106,9 @@ class FTPRequest:
         self._ftp = FTP(parsed.hostname)
         self._ftp.login(parsed.username, parsed.password)
         self._ftp.voidcmd("TYPE I")
-        self._transfer, self._size = self._ftp.ntransfercmd("RETR %s" % (parsed.path,))
+        self._transfer, self._size = self._ftp.ntransfercmd(
+            "RETR %s" % (parsed.path,)
+        )
         if self._size:
             self.headers["Content-Length"] = str(self._size)
 
@@ -783,7 +785,8 @@ class Client(object):
                 break
 
             logger.error(
-                "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
+                "Download incomplete, downloaded %s byte(s) out of %s"
+                % (total, size)
             )
 
             if isinstance(r, FTPAdapter):
