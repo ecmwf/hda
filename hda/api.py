@@ -90,7 +90,6 @@ class DownloadSizeError(HDAError):
 
 
 class FTPRequest:
-
     history = None
     is_redirect = False
     status_code = 200
@@ -99,7 +98,6 @@ class FTPRequest:
     raw = None
 
     def __init__(self, url):
-
         logger.warning("Downloading from FTP url: %s", url)
 
         parsed = urlparse(url)
@@ -118,7 +116,6 @@ class FTPRequest:
         self._ftp.close()
 
     def iter_content(self, chunk_size):
-
         while True:
             chunk = self._transfer.recv(chunk_size)
             if not chunk:
@@ -330,38 +327,41 @@ class Configuration:
         verify=None,
         path=None,
     ):
+        credentials = {
+            "url": url or BROKER_URL,
+            "user": None,
+            "password": None,
+            "verify": True,
+        }
+
         dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
 
-        if url is None or user is None or password is None:
-            try:
-                config = read_config(dotrc)
+        if os.path.isfile(dotrc):
+            config = read_config(dotrc)
 
-                if url is None:
-                    url = config.get("url")
+            for key in credentials.keys():
+                if config.get(key):
+                    credentials[key] = config.get(key)
 
-                if user is None:
-                    user = config.get("user")
+        if url is not None:
+            credentials["url"] = url
 
-                if password is None:
-                    password = config.get("password")
+        if user is not None:
+            credentials["user"] = user
 
-                verify = config.get("verify", True)
+        if password is not None:
+            credentials["password"] = password
 
-            except FileNotFoundError:
-                raise ConfigurationError("Missing configuration file: %s" % (dotrc))
+        if verify is not None:
+            credentials["verify"] = verify
 
-        if url is None:
-            url = BROKER_URL
+        if credentials["user"] is None or credentials["password"] is None:
+            raise ConfigurationError("Missing or incomplete configuration")
 
-        if user is None or password is None:
-            raise ConfigurationError(
-                "Missing/incomplete configuration file: %s" % (dotrc)
-            )
-
-        self.url = url
-        self.user = user
-        self.password = password
-        self.verify = True if verify is None else verify
+        self.url = credentials["url"]
+        self.user = credentials["user"]
+        self.password = credentials["password"]
+        self.verify = credentials["verify"]
 
 
 class Client(object):
@@ -479,7 +479,6 @@ class Client(object):
         return self._token
 
     def _invalidate_token(self):
-
         self._token_creation_time = None
 
     def get_token(self):
@@ -735,7 +734,6 @@ class Client(object):
         headers = None
 
         while tries < self.retry_max:
-
             r = self.robust(self.session.get)(
                 full,
                 stream=True,
