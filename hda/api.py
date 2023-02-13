@@ -90,7 +90,6 @@ class DownloadSizeError(HDAError):
 
 
 class FTPRequest:
-
     history = None
     is_redirect = False
     status_code = 200
@@ -99,7 +98,6 @@ class FTPRequest:
     raw = None
 
     def __init__(self, url):
-
         logger.warning("Downloading from FTP url: %s", url)
 
         parsed = urlparse(url)
@@ -118,7 +116,6 @@ class FTPRequest:
         self._ftp.close()
 
     def iter_content(self, chunk_size):
-
         while True:
             chunk = self._transfer.recv(chunk_size)
             if not chunk:
@@ -482,7 +479,6 @@ class Client(object):
         return self._token
 
     def _invalidate_token(self):
-
         self._token_creation_time = None
 
     def get_token(self):
@@ -738,7 +734,6 @@ class Client(object):
         headers = None
 
         while tries < self.retry_max:
-
             r = self.robust(self.session.get)(
                 full,
                 stream=True,
