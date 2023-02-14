@@ -1,9 +1,9 @@
 API
 ===
 
-.. automodule:: api
+.. automodule:: hda.api
 
-.. autoattribute:: api.BROKER_URL
+.. autoattribute:: hda.pi.BROKER_URL
 
 .. autoclass:: RequestRunner
    :members:
