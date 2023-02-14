@@ -1,7 +1,7 @@
 Changelog
 =========
 
-Version 0.4.0
+Version 1.12
 -------------
 * Refactored client configuration
 * Logging system is now left to the developer
