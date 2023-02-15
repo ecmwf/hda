@@ -3,7 +3,7 @@ API
 
 .. automodule:: hda.api
 
-.. autoattribute:: hda.api.BROKER_URL
+.. autoattribute:: hda.pi.BROKER_URL
 
 .. autoclass:: RequestRunner
    :members:
