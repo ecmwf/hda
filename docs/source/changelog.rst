@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 1.13
+-------------
+* Minor documentation fixes
+
 Version 1.12
 -------------
 * Refactored client configuration

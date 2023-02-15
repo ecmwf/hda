@@ -1,5 +1,5 @@
 {
-    "datasetId": "EO:CODA:DAT:SENTINEL-3:OL_1_EFR___",
+    "datasetId": "EO:EUM:DAT:SENTINEL-3:OL_1_EFR___",
     "dateRangeSelectValues": [{
         "end": "2019-07-03T14:03:00.000Z",
         "name": "dtrange",

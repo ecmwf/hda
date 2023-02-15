@@ -17,7 +17,7 @@ The client can be used directly into another python script as in the following e
     c = Client()
 
     query = {
-        "datasetId": "EO:CODA:DAT:SENTINEL-3:OL_1_EFR___",
+        "datasetId": "EO:EUM:DAT:SENTINEL-3:OL_1_EFR___",
         "dateRangeSelectValues": [{
             "end": "2019-07-03T14:03:00.000Z",
             "name": "dtrange",
