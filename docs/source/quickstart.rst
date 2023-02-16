@@ -15,14 +15,18 @@ The client can be used directly into another python script as in the following e
     from hda import Client
 
     c = Client()
+    
+    
 
     query = {
-        "datasetId": "EO:EUM:DAT:SENTINEL-3:OL_1_EFR___",
-        "dateRangeSelectValues": [{
-            "end": "2019-07-03T14:03:00.000Z",
-            "name": "dtrange",
-            "start": "2019-07-03T13:59:00.000Z"
-        }],
+        "datasetId": "EO:EUM:DAT:SENTINEL-3:SR_1_SRA___",
+        "dateRangeSelectValues": [
+          {
+              "name": "position",
+              "start": "2023-01-01T00:00:00.000Z",
+              "end": "2023-01-01T01:00:00.000Z"
+          }
+        ],
         "stringChoiceValues": []
     }
     matches = c.search(query)
