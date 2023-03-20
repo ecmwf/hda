@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 1.14
+-------------
+* The `download_dir` is created automatically
+
 Version 1.13
 -------------
 * Minor documentation fixes
