@@ -92,7 +92,7 @@ def test_search_results_slicing():
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_1():
-    # c = Client()
+    c = Client()
 
     r = {
         "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
@@ -104,17 +104,15 @@ def test_hda_1():
             }
         ],
     }
-    print(r)
-    # matches = c.search(r)
-    #  print(matches)
-    # assert len(matches.results) > 0, matches
-    # matches.download()
-    assert True
+
+    matches = c.search(r)
+    print(matches)
+    assert len(matches.results) > 0, matches
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_2():
-    # c = Client()
+    c = Client()
 
     r = {
         "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
@@ -130,8 +128,7 @@ def test_hda_2():
             {"name": "format", "value": "tgz"},
         ],
     }
-    print(r)
-    # matches = c.search(r)
-    # assert len(matches.results) == 1, matches
-    # matches.download()
-    assert True
+
+    matches = c.search(r)
+    assert len(matches.results) == 1, matches
+    matches.download()
