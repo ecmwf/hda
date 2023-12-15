@@ -88,10 +88,12 @@ def test_search_results_slicing():
     assert s[-1].volume == 50
     assert len(s[:]) == len(r)
     assert s[1:].volume == 140
-    
+
+
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_1():
     assert True
+
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_2():
