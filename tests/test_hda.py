@@ -95,17 +95,17 @@ def test_search_results_slicing():
 def test_hda_1():
     #c = Client()
 
-    #r = {
-     #   "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
-      #  "dateRangeSelectValues": [
-       #     {
-        #        "name": "dtrange",
-         #       "start": "2020-04-11T00:00:00.000Z",
-          #      "end": "2020-05-21T00:00:00.000Z",
-           # }
-        #],
-    #}
-
+    r = {
+        "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
+        "dateRangeSelectValues": [
+            {
+                "name": "dtrange",
+                "start": "2020-04-11T00:00:00.000Z",
+                "end": "2020-05-21T00:00:00.000Z",
+            }
+        ],
+    }
+    print(r)
     # matches = c.search(r)
     #  print(matches)
     # assert len(matches.results) > 0, matches
@@ -118,21 +118,21 @@ def test_hda_1():
 def test_hda_2():
     #c = Client()
 
-    #r = {
-     #   "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
-      #  "multiStringSelectValues": [
-       #     {"name": "type", "value": ["validated_reanalysis"]},
-        #    {"name": "variable", "value": ["ammonia"]},
-         #   {"name": "model", "value": ["chimere"]},
-          #  {"name": "level", "value": ["0"]},
-           # {"name": "month", "value": ["01"]},
-            #{"name": "year", "value": ["2018"]},
-        #],
-        #"stringChoiceValues": [
-         #   {"name": "format", "value": "tgz"},
-        #],
-    #}
-
+    r = {
+        "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
+        "multiStringSelectValues": [
+            {"name": "type", "value": ["validated_reanalysis"]},
+            {"name": "variable", "value": ["ammonia"]},
+            {"name": "model", "value": ["chimere"]},
+            {"name": "level", "value": ["0"]},
+            {"name": "month", "value": ["01"]},
+            {"name": "year", "value": ["2018"]},
+        ],
+        "stringChoiceValues": [
+            {"name": "format", "value": "tgz"},
+        ],
+    }
+    print(r)
     # matches = c.search(r)
     # assert len(matches.results) == 1, matches
     # matches.download()
