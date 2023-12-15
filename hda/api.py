@@ -31,7 +31,7 @@ from warnings import warn
 import requests
 from tqdm import tqdm
 
-BROKER_URL = "https://wekeo-broker.apps.mercator.dpi.wekeo.eu/databroker"
+BROKER_URL = "https://wekeo-broker.prod.wekeo2.eu/databroker"
 
 logger = logging.getLogger(__name__)
 
