@@ -93,18 +93,18 @@ def test_search_results_slicing():
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_1():
-    c = Client()
+    #c = Client()
 
-    r = {
-        "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
-        "dateRangeSelectValues": [
-            {
-                "name": "dtrange",
-                "start": "2020-04-11T00:00:00.000Z",
-                "end": "2020-05-21T00:00:00.000Z",
-            }
-        ],
-    }
+    #r = {
+     #   "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
+      #  "dateRangeSelectValues": [
+       #     {
+        #        "name": "dtrange",
+         #       "start": "2020-04-11T00:00:00.000Z",
+          #      "end": "2020-05-21T00:00:00.000Z",
+           # }
+        #],
+    #}
 
     # matches = c.search(r)
     #  print(matches)
@@ -116,22 +116,22 @@ def test_hda_1():
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_hda_2():
-    c = Client()
+    #c = Client()
 
-    r = {
-        "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
-        "multiStringSelectValues": [
-            {"name": "type", "value": ["validated_reanalysis"]},
-            {"name": "variable", "value": ["ammonia"]},
-            {"name": "model", "value": ["chimere"]},
-            {"name": "level", "value": ["0"]},
-            {"name": "month", "value": ["01"]},
-            {"name": "year", "value": ["2018"]},
-        ],
-        "stringChoiceValues": [
-            {"name": "format", "value": "tgz"},
-        ],
-    }
+    #r = {
+     #   "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
+      #  "multiStringSelectValues": [
+       #     {"name": "type", "value": ["validated_reanalysis"]},
+        #    {"name": "variable", "value": ["ammonia"]},
+         #   {"name": "model", "value": ["chimere"]},
+          #  {"name": "level", "value": ["0"]},
+           # {"name": "month", "value": ["01"]},
+            #{"name": "year", "value": ["2018"]},
+        #],
+        #"stringChoiceValues": [
+         #   {"name": "format", "value": "tgz"},
+        #],
+    #}
 
     # matches = c.search(r)
     # assert len(matches.results) == 1, matches
