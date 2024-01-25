@@ -32,7 +32,6 @@ from warnings import warn
 import requests
 from tqdm import tqdm
 
-SSO_URL = "https://identity.prod.wekeo2.eu/"
 BROKER_URL = "https://hda-broker.prod.wekeo2.eu/api/v1"
 ITEMS_PER_PAGE = 100
 
@@ -80,7 +79,7 @@ def get_filename(response, fallback):
     if cd is None:
         return fallback
 
-    return cd[cd.find("filename=") + len("filename="):]
+    return cd[cd.find("filename=") + len("filename=") :]
 
 
 class HDAError(Exception):
@@ -346,7 +345,7 @@ class Configuration:
             "url": url or BROKER_URL,
             "user": None,
             "password": None,
-            "verify": True,
+            "verify": False,
         }
 
         dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
@@ -502,32 +501,16 @@ class Client(object):
         :return: A valid access token.
         :rtype: str
         """
-        # XXX Temporary token retrieval
-        assert "HDA_CLIENT_ID" in os.environ, "Please set the HDA_CLIENT_ID in your env"
-        assert "HDA_CLIENT_SECRET" in os.environ, "Please set the HDA_CLIENT_SECRET in your env"
         data = {
-            "grant_type": "password",
             "username": self.config.user,
             "password": self.config.password,
-            "client_id": os.environ["HDA_CLIENT_ID"],
-            "client_secret": os.environ["HDA_CLIENT_SECRET"],
-            "scope": "openid",
         }
         response = requests.post(
-            "https://identity.prod.wekeo2.eu/oauth2/token", data=data, verify=False
+            "https://gateway.prod.wekeo2.eu/hda-broker/gettoken",
+            data=data,
+            verify=self.config.verify,
         )
         return response.json()["access_token"]
-
-        # session = requests.Session()
-        # session.auth = (self.config.user, self.config.password)
-        # full = self.full_url("gettoken")
-        # logger.debug("===> GET %s", full)
-        # r = self.robust(session.get)(full)
-        # r.raise_for_status()
-        # result = r.json()
-        # logger.debug("<=== %s", shorten(result))
-        # session.auth = None
-        # return result["access_token"]
 
     def accept_tac(self, dataset_id):
         """Implicitly accept the terms and conditions of the service."""
@@ -670,7 +653,9 @@ class Client(object):
         full = self.full_url(*args)
         logger.debug("===> GET %s", full)
 
-        r = self.robust(self.session.get)(full, params=kwargs, timeout=self.timeout)
+        r = self.robust(self.session.get)(
+            full, params=kwargs, verify=self.config.verify, timeout=self.timeout
+        )
         r.raise_for_status()
         result = r.json()
         logger.debug("<=== %s", shorten(result))
@@ -687,7 +672,9 @@ class Client(object):
         full = self.full_url(*args)
         logger.debug("===> HEAD %s", full)
 
-        r = self.robust(self.session.head)(full, timeout=self.timeout)
+        r = self.robust(self.session.head)(
+            full, verify=self.config.verify, timeout=self.timeout
+        )
         r.raise_for_status()
         logger.debug("<=== %s", r)
         return r
@@ -706,7 +693,9 @@ class Client(object):
         full = self.full_url(*args)
         logger.debug("===> POST %s", full)
         logger.debug("===> POST %s", shorten(message))
-        res = self.robust(self.session.post)(full, json=message, timeout=self.timeout)
+        res = self.robust(self.session.post)(
+            full, json=message, verify=self.config.verify, timeout=self.timeout
+        )
         res.raise_for_status()
         result = res.json()
         logger.debug("<=== %s", shorten(result))
@@ -727,7 +716,9 @@ class Client(object):
         logger.debug("===> PUT %s", full)
         logger.debug("===> PUT %s", shorten(message))
 
-        r = self.robust(self.session.put)(full, json=message, timeout=self.timeout)
+        r = self.robust(self.session.put)(
+            full, json=message, verify=self.config.verify, timeout=self.timeout
+        )
         r.raise_for_status()
         return r
 
