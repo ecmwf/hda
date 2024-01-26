@@ -148,7 +148,7 @@ class Paginator:
     def yield_result(self, page, limit=None):
         for feat in page["features"]:
             self.returned += 1
-            if limit is not None and self.returned > limit:
+            if limit is not None and self.returned >= limit:
                 return
             yield feat
 
@@ -172,6 +172,9 @@ class Paginator:
 
         prop = page["properties"]
         while prop["startIndex"] < prop["totalResults"]:
+            if self.returned >= prop["totalResults"]:
+                return
+
             if limit is not None and self.returned > limit:
                 return
 
@@ -254,7 +257,20 @@ class SearchResults:
         self.stream = client.stream
         self.results = results
         self.dataset = dataset
-        self.volume = sum(r.get("properties", {}).get("size", 0) for r in results)
+        self.volume = self.__sum(results)
+
+    def __sum(self, results):
+        sum_ = 0
+        for r in results:
+            prop = r.get("properties", {})
+            size = prop.get("size", 0)
+            if size == "ND":
+                sum_ = "ND"
+                break
+            else:
+                sum_ = size
+
+        return sum_
 
     def __repr__(self):
         return "SearchResults[items=%s,volume=%s]" % (
