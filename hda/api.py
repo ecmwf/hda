@@ -26,13 +26,12 @@ import time
 from enum import Enum
 from ftplib import FTP
 from itertools import cycle, repeat
-from urllib.parse import urlparse
-from warnings import warn
+from urllib.parse import urljoin, urlparse
 
 import requests
 from tqdm import tqdm
 
-BROKER_URL = "https://hda-broker.prod.wekeo2.eu/api/v1"
+BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
 ITEMS_PER_PAGE = 100
 
 logger = logging.getLogger(__name__)
@@ -148,7 +147,7 @@ class Paginator:
     def yield_result(self, page, limit=None):
         for feat in page["features"]:
             self.returned += 1
-            if limit is not None and self.returned >= limit:
+            if limit is not None and self.returned > limit:
                 return
             yield feat
 
@@ -268,7 +267,7 @@ class SearchResults:
                 sum_ = "ND"
                 break
             else:
-                sum_ = size
+                sum_ += size
 
         return sum_
 
@@ -361,7 +360,7 @@ class Configuration:
             "url": url or BROKER_URL,
             "user": None,
             "password": None,
-            "verify": False,
+            "verify": True,
         }
 
         dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
@@ -401,10 +400,6 @@ class Client(object):
         By default `None` is passed, which means that a `$HOME/.hdarc`
         configuration file will be read.
     :type config: class:`hda.api.Configuration`
-    :param token_timeout: The authentication token timeout in seconds.
-    :type token_timeout: int, optional
-    :param quiet: Deprecated.
-    :param debug: Deprecated.
     :param timeout: The timeout of each request in seconds. `None` means no timeout.
     :type timeout: int, optional
     :param retry_max: The number of retries on request failure.
@@ -420,49 +415,29 @@ class Client(object):
     def __init__(
         self,
         config=None,
-        token_timeout=60 * 45,
-        quiet=None,
-        debug=None,
         timeout=None,
         retry_max=500,
         sleep_max=120,
         progress=True,
         max_workers=2,
     ):
-        if quiet is not None:
-            warn(
-                "The 'quiet' argument is deprecated and "
-                "will be removed in a future version. "
-                "Configure the 'hda' logger with a proper log level instead.",
-                category=DeprecationWarning,
-            )
-
-        if debug is not None:
-            warn(
-                "The 'debug' argument is deprecated and "
-                "will be removed in a future version. "
-                "Configure the 'hda' logger with a proper log level instead.",
-                category=DeprecationWarning,
-            )
-
         self.config = config or Configuration()
         self.timeout = timeout
-        self.token_timeout = token_timeout
         self.sleep_max = sleep_max
         self.retry_max = retry_max
         self.progress = progress
         self.max_workers = max_workers
 
         self._session = None
-        self._token = None
-        self._token_creation_time = None
+        self._access_token = None
+        self._refresh_token = None
+        self._token_expiration = None
         self._tqdm_position = cycle(range(self.max_workers))
 
         logger.debug(
             "HDA %s",
             dict(
                 url=self.config.url,
-                token_timeout=self.token_timeout,
                 user=self.config.user,
                 password=self.config.password,
                 verify=self.config.verify,
@@ -487,7 +462,12 @@ class Client(object):
         if len(args) == 1 and args[0].split(":")[0] in ("http", "https"):
             return args[0]
 
-        full = "/".join([str(x) for x in [self.config.url] + list(args)])
+        base_url = self.config.url
+        url_parts = self.config.url.split("/")
+        if url_parts[-2] != "api" and url_parts[-1] != "v1":
+            base_url = urljoin(self.config.url, "api/v1")
+
+        full = "/".join([str(x) for x in [base_url] + list(args)])
         return full
 
     @property
@@ -496,37 +476,53 @@ class Client(object):
         now = int(time.time())
 
         def is_token_expired():
-            return (
-                self._token_creation_time is None
-                or (now - self._token_creation_time) > self.token_timeout
-            )
+            return self._token_expiration is None or now > self._token_expiration
 
         if is_token_expired():
             logger.debug("====== Token expired, renewing")
-            self._token = self.get_token()
-            self._token_creation_time = now
+            payload = self._get_token()
+            self._access_token = payload["access_token"]
+            self._refresh_token = payload["refresh_token"]
+            self._token_expiration = now + payload["expires_in"]
 
-        return self._token
+        return self._access_token
 
     def _invalidate_token(self):
-        self._token_creation_time = None
+        self._token_expiration = None
 
-    def get_token(self):
+    def _get_token(self):
         """Requests a new access token using the configured credentials.
 
         :return: A valid access token.
         :rtype: str
         """
-        data = {
-            "username": self.config.user,
-            "password": self.config.password,
-        }
-        response = requests.post(
-            "https://gateway.prod.wekeo2.eu/hda-broker/gettoken",
-            data=data,
-            verify=self.config.verify,
-        )
-        return response.json()["access_token"]
+
+        def get_new_token():
+            data = {
+                "username": self.config.user,
+                "password": self.config.password,
+            }
+            return requests.post(
+                urljoin(self.config.url, "gettoken"),
+                json=data,
+                verify=self.config.verify,
+            )
+
+        def refresh_token():
+            return requests.post(
+                urljoin(self.config.url, "refreshtoken"),
+                data={"refresh_token": self._refresh_token},
+                verify=self.config.verify,
+            )
+
+        if self._refresh_token is not None:
+            r = refresh_token()
+            if r.status_code in (requests.codes.forbidden, requests.codes.bad_request):
+                r = get_new_token()
+        else:
+            r = get_new_token()
+
+        return r.json()
 
     def accept_tac(self, dataset_id):
         """Implicitly accept the terms and conditions of the service."""
@@ -634,6 +630,10 @@ class Client(object):
         """Returns the full list of available datasets.
         Each element of the list is a JSON object that includes
         the abstract, the dataset ID and other properties.
+
+        :param limit: The maximum number of results to return.
+            Set to None to return all results (default)
+        :type limit: int
         """
         return list(DatasetPaginator(self.get).run(limit=limit))
 
