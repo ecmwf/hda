@@ -31,6 +31,8 @@ from urllib.parse import urljoin, urlparse
 import requests
 from tqdm import tqdm
 
+from hda.utils import convert
+
 BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
 ITEMS_PER_PAGE = 100
 
@@ -621,6 +623,11 @@ class Client(object):
 
         :return: An :class:`hda.api.SearchResults` instance
         """
+        # Users can pass in a query in v1 format and we try to convert it
+        # into the new one. If the query is already in v2 format, this is
+        # a no-op.
+        # This might be removed in future version.
+        query = convert(query)
         assert "dataset_id" in query, "Missing dataset_id, check your query"
         self.accept_tac(query["dataset_id"])
         results = SearchPaginator(self.post).run(query=query, limit=limit)
