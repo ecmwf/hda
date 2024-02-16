@@ -24,7 +24,6 @@ import logging
 import os
 import time
 from enum import Enum
-from ftplib import FTP
 from itertools import cycle, repeat
 from urllib.parse import urljoin, urlparse
 
@@ -97,48 +96,6 @@ class RequestFailedError(HDAError):
 
 class DownloadSizeError(HDAError):
     pass
-
-
-class FTPRequest:
-    history = None
-    is_redirect = False
-    status_code = 200
-    reason = ""
-    headers = dict()
-    raw = None
-
-    def __init__(self, url):
-        logger.warning("Downloading from FTP url: %s", url)
-
-        parsed = urlparse(url)
-        self._ftp = FTP(parsed.hostname)
-        self._ftp.login(parsed.username, parsed.password)
-        self._ftp.voidcmd("TYPE I")
-        self._transfer, self._size = self._ftp.ntransfercmd("RETR %s" % (parsed.path,))
-        if self._size:
-            self.headers["Content-Length"] = str(self._size)
-
-    def raise_for_status(self):
-        """Don't deal with FTP requests code.s"""
-        pass
-
-    def close(self):
-        self._ftp.close()
-
-    def iter_content(self, chunk_size):
-        while True:
-            chunk = self._transfer.recv(chunk_size)
-            if not chunk:
-                break
-            yield chunk
-
-
-class FTPAdapter(requests.adapters.BaseAdapter):
-    """A `requests.adapters.BaseAdapter` subclass to handle FTP requests."""
-
-    def send(self, request, *args, **kwargs):
-        assert "Range" not in request.headers
-        return FTPRequest(request.url)
 
 
 class Paginator:
@@ -539,9 +496,7 @@ class Client(object):
     def session(self):
         """The `requests` library session object, with the attached authentication."""
         if self._session is None:
-            session = requests.Session()
-            session.mount("ftp://", FTPAdapter())
-            self._session = session
+            self._session = requests.Session()
         self._attach_auth()
         return self._session
 
@@ -820,10 +775,6 @@ class Client(object):
             logger.error(
                 "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
             )
-
-            if isinstance(r, FTPAdapter):
-                logger.warning("Ignoring size mismatch")
-                return filename
 
             logger.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)
