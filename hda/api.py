@@ -25,7 +25,7 @@ import os
 import time
 from enum import Enum
 from itertools import cycle, repeat
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import requests
 from tqdm import tqdm
@@ -44,6 +44,11 @@ class RequestType(Enum):
 
 
 def bytes_to_string(n):
+    try:
+        int(n)
+    except ValueError:
+        return n
+
     u = ["", "KB", "MB", "GB", "TB", "PB"]
     i = 0
     while n >= 1024:
@@ -744,8 +749,12 @@ class Client(object):
                 logger.debug("Headers: %s", r.headers)
                 filename = get_filename(r, download_id)
 
-                # https://github.com/ecmwf/hda/issues/3
-                size = int(r.headers.get("Content-Length", size))
+                try:
+                    # https://github.com/ecmwf/hda/issues/3
+                    size = int(r.headers.get("Content-Length", size))
+                except ValueError:
+                    # For certain datasets, even the header is missins
+                    size = None
 
                 with tqdm(
                     total=size,
@@ -765,11 +774,12 @@ class Client(object):
                                 pbar.update(len(chunk))
 
             except requests.exceptions.ConnectionError as e:
-                logger.error("Download interupted: %s" % (e,))
+                logger.error("Download interrupted: %s" % (e,))
             finally:
                 r.close()
 
-            if total >= size:
+            if size is None or total >= size:
+                size = os.path.getsize(filename)
                 break
 
             logger.error(
