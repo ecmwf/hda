@@ -47,6 +47,9 @@ def convert(query):
             elif dataset_id.startswith("EO:CNES:DAT:SWH"):
                 new_query["creationDateStart"] = start
                 new_query["creationDateEnd"] = end
+            elif dataset_id.startswith("EO:ESA"):
+                new_query["startDate"] = start
+                new_query["completionDate"] = end
             else:
                 new_query[f"{name}_start"] = start
                 new_query[f"{name}_end"] = end
