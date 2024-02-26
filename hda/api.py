@@ -719,8 +719,10 @@ class Client(object):
         """
         full = self.full_url(*[f"dataaccess/download/{download_id}"])
 
-        if download_dir is None or not os.path.exists(download_dir):
+        if download_dir is None:
             download_dir = "."
+        else:
+            os.makedirs(download_dir, exist_ok=True)
 
         logger.info(
             "Downloading %s (%s)",
