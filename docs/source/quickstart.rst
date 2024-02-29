@@ -15,17 +15,11 @@ The client can be used directly into another python script as in the following e
     from hda import Client
 
     c = Client()
-    
+
     query = {
-        "datasetId": "EO:EUM:DAT:SENTINEL-3:SR_1_SRA___",
-        "dateRangeSelectValues": [
-          {
-              "name": "position",
-              "start": "2023-01-01T00:00:00.000Z",
-              "end": "2023-01-01T01:00:00.000Z"
-          }
-        ],
-        "stringChoiceValues": []
+        'dataset_id': 'EO:EUM:DAT:SENTINEL-3:OL_1_EFR___',
+        'dtstart': '2023-07-03T13:59:00.000Z',
+        'dtend': '2023-07-03T14:03:00.000Z',
     }
     matches = c.search(query)
     print(matches)
@@ -34,5 +28,10 @@ The client can be used directly into another python script as in the following e
 .. note::
     The query must be a json valid object.
     Please refer to the official documentation of the HDA for instructions on how to get the list of the available parameters.
+
+.. warning::
+    The query format has been streamlined in version 2, but the client still accepts most of the old queries and automatically
+    convert them into the new format under the hood, before they are submitted to the API.
+    You might still want to explicitly change the queries to reflect the updated structure.
 
 Alternatively, it can be wrapped into a script to be executed from the command line. Please refer to the ``demos/demo.py`` file for a simple demostration.

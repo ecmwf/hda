@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.0
+-----------
+* Updated version compatible with HDA v2
+
 Version 1.14
 -------------
 * The `download_dir` is created automatically

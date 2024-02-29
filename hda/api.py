@@ -23,20 +23,32 @@ import json
 import logging
 import os
 import time
-from ftplib import FTP
+from enum import Enum
 from itertools import cycle, repeat
-from urllib.parse import urlparse
-from warnings import warn
+from urllib.parse import urljoin
 
 import requests
 from tqdm import tqdm
 
-BROKER_URL = "https://wekeo-broker.prod.wekeo2.eu/databroker"
+from hda.utils import convert
+
+BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
+ITEMS_PER_PAGE = 100
 
 logger = logging.getLogger(__name__)
 
 
+class RequestType(Enum):
+    GET = 1
+    POST = 2
+
+
 def bytes_to_string(n):
+    try:
+        int(n)
+    except ValueError:
+        return n
+
     u = ["", "KB", "MB", "GB", "TB", "PB"]
     i = 0
     while n >= 1024:
@@ -65,12 +77,14 @@ def shorten(r, length=80):
 
 def get_filename(response, fallback):
     """
-    Retrieve the file name from the first redirect response.
+    Retrieve the file name from the content-disposition header:
+    'attachment; filename=CZ_2018_DU004_3035_V010_fgdb.zip'
     """
-    r = response.history[-1]
-    if r.status_code == 302 and r.headers.get("Location"):
-        return r.headers.get("Location").split("/")[-1].split("?")[0]
-    return fallback
+    cd = response.headers.get("content-disposition")
+    if cd is None:
+        return fallback
+
+    return cd[cd.find("filename=") + len("filename=") :]
 
 
 class HDAError(Exception):
@@ -89,139 +103,99 @@ class DownloadSizeError(HDAError):
     pass
 
 
-class FTPRequest:
-    history = None
-    is_redirect = False
-    status_code = 200
-    reason = ""
-    headers = dict()
-    raw = None
+class Paginator:
+    def __init__(self, request):
+        self.request = request
+        self.returned = 0
 
-    def __init__(self, url):
-        logger.warning("Downloading from FTP url: %s", url)
+    def yield_result(self, page, limit=None):
+        for feat in page["features"]:
+            self.returned += 1
+            if limit is not None and self.returned > limit:
+                return
+            yield feat
 
-        parsed = urlparse(url)
-        self._ftp = FTP(parsed.hostname)
-        self._ftp.login(parsed.username, parsed.password)
-        self._ftp.voidcmd("TYPE I")
-        self._transfer, self._size = self._ftp.ntransfercmd("RETR %s" % (parsed.path,))
-        if self._size:
-            self.headers["Content-Length"] = str(self._size)
+    def make_request(self, query):
+        if self.request_type == RequestType.GET:
+            return self.request(self.action, **query)
+        elif self.request_type == RequestType.POST:
+            return self.request(query, self.action)
 
-    def raise_for_status(self):
-        """Don't deal with FTP requests code.s"""
-        pass
+    def run(self, *, query=None, limit=None, items_per_page=100):
+        if query is None:
+            query = {}
 
-    def close(self):
-        self._ftp.close()
+        params = {
+            "startIndex": 0,
+            "itemsPerPage": items_per_page,
+        }
+        query.update(params)
+        page = self.make_request(query)
+        yield from self.yield_result(page, limit)
 
-    def iter_content(self, chunk_size):
-        while True:
-            chunk = self._transfer.recv(chunk_size)
-            if not chunk:
-                break
-            yield chunk
+        prop = page["properties"]
+        while prop["startIndex"] < prop["totalResults"]:
+            if self.returned >= prop["totalResults"]:
+                return
+
+            if limit is not None and self.returned > limit:
+                return
+
+            params["startIndex"] = prop["startIndex"] + items_per_page
+            query.update(params)
+            page = self.make_request(query)
+            prop = page["properties"]
+            yield from self.yield_result(page, limit)
 
 
-class FTPAdapter(requests.adapters.BaseAdapter):
-    """A `requests.adapters.BaseAdapter` subclass to handle FTP requests."""
-
-    def send(self, request, *args, **kwargs):
-        assert "Range" not in request.headers
-        return FTPRequest(request.url)
+class SearchPaginator(Paginator):
+    action = "dataaccess/search"
+    request_type = RequestType.POST
 
 
-class RequestRunner:
-    """Base class to run an API request.
+class DatasetPaginator(Paginator):
+    action = "datasets"
+    request_type = RequestType.GET
 
-    :param client: The :class:`hda.api.Client` instance to be used to
-        perform the request.
-    :type client: :class:`hda.api.Client`
+
+class DataOrderRequest:
+    """Runner class for a data order request.
+    A data order request is performed in order to retrieve actual files
+    for a given result returned in the data request phase.
     """
+
+    action = "dataaccess/download"
 
     def __init__(self, client):
         self.get = client.get
+        self.head = client.head
         self.post = client.post
         self.sleep_max = client.sleep_max
 
-    def _run(self, query):
+    def run(self, query):
         result = self.post(query, self.action)
-        job_id = result[self.id_key]
-
-        status = result["status"]
+        download_id = result["download_id"]
 
         sleep = 1
+        status = "started"
         while status != "completed":
             if status == "failed":
                 raise RequestFailedError(result["message"])
             assert status in ["started", "running"]
             logger.debug("Sleeping %s seconds", sleep)
             time.sleep(sleep)
-            result = self.get(self.action, "status", job_id)
-            status = result["status"]
+            response = self.head(self.action, download_id)
+            if response.status_code == 200:
+                status = "completed"
+            elif response.status_code == 202:
+                status = "running"
+            else:
+                status = "failed"
             sleep *= 1.1
             if sleep > self.sleep_max:
                 sleep = self.sleep_max
 
-        return result, job_id
-
-
-class DataRequestRunner(RequestRunner):
-    """Runner class for a data request.
-    A data request looks for datasets matching a given query.
-    """
-
-    action = "datarequest"
-    id_key = "jobId"
-
-    def _paginate(self, job_id):
-        result = self.get(self.action, "jobs", job_id, "result")
-        page = result
-        for p in page["content"]:
-            yield p
-
-        while page.get("nextPage"):
-            logger.debug(json.dumps(page, indent=4))
-            page = self.get(page["nextPage"])
-            for p in page["content"]:
-                yield p
-
-    def run(self, query):
-        """Perform a data request with the given query.
-
-        :param query: The query to submit.
-            Refer to the official WEkEO documentation.
-        :type query: json
-
-        :return: A list of results in JSON format.
-        :rtype: list
-        """
-        _, job_id = self._run(query)
-        return list(self._paginate(job_id)), job_id
-
-
-class DataOrderRequest(RequestRunner):
-    """Runner class for a data order request.
-    A data order request is performed in order to retrieve download URLs
-    for a given result returned in the data request phase.
-    """
-
-    action = "dataorder"
-    id_key = "orderId"
-
-    def run(self, query):
-        """Perform a data order request with the given query.
-
-        :param query: The query to submit.
-            Usually, the :class:`hda.api.Client` will fill up
-            this parameter.
-        :type query: json
-
-        :return: A list of results in JSON format.
-        :rtype: list
-        """
-        _, order_id = self._run(query)
-        return ("dataorder", "download", order_id)
+        return download_id
 
 
 class SearchResults:
@@ -237,23 +211,34 @@ class SearchResults:
     :type client: :class:`hda.api.Client`
     :param results: The results list coming from the data request.
     :type results: list
-    :param job_id: The job_id returned by the API that identifies the data request.
-    :type job_id: str
+    :param dataset: The dataset identifier.
+    :type dataset: string
     """
 
-    def __init__(self, client, results, job_id):
+    def __init__(self, client, results, dataset):
         self.client = client
         self.stream = client.stream
         self.results = results
-        self.job_id = job_id
-        self.volume = sum(r.get("size", 0) for r in results)
-        self._dataorders_cache = {}
+        self.dataset = dataset
+        self.volume = self.__sum(results)
+
+    def __sum(self, results):
+        sum_ = 0
+        for r in results:
+            prop = r.get("properties", {})
+            size = prop.get("size", 0)
+            if size == "ND":
+                sum_ = "ND"
+                break
+            else:
+                sum_ += size
+
+        return sum_
 
     def __repr__(self):
-        return "SearchResults[items=%s,volume=%s,jobId=%s]" % (
+        return "SearchResults[items=%s,volume=%s]" % (
             len(self),
             bytes_to_string(self.volume),
-            self.job_id,
         )
 
     def __len__(self):
@@ -271,19 +256,27 @@ class SearchResults:
                 index = slice(index, None, None)
 
         instance = self.__class__(
-            client=self.client, results=self.results[index], job_id=self.job_id
+            client=self.client, results=self.results[index], dataset=self.dataset
         )
-        instance._dataorders_cache = self._dataorders_cache
         return instance
 
     def _download(self, result, download_dir: str = "."):
-        query = {"jobId": self.job_id, "uri": result["url"]}
         logger.debug(result)
-        url = self._dataorders_cache.get(result["url"])
-        if url is None:
-            url = DataOrderRequest(self.client).run(query)
-            self._dataorders_cache[result["url"]] = url
-        self.stream(result.get("filename"), result.get("size"), download_dir, *url)
+
+        self.client.accept_tac(self.dataset)
+
+        query = {
+            "dataset_id": self.dataset,
+            "product_id": result["id"],
+            "location": result["properties"]["location"],
+        }
+        download_id = DataOrderRequest(self.client).run(query)
+
+        self.stream(
+            download_id,
+            result["properties"]["size"],
+            download_dir,
+        )
 
     def download(self, download_dir: str = "."):
         """Downloads the results into the given download directory.
@@ -371,10 +364,6 @@ class Client(object):
         By default `None` is passed, which means that a `$HOME/.hdarc`
         configuration file will be read.
     :type config: class:`hda.api.Configuration`
-    :param token_timeout: The authentication token timeout in seconds.
-    :type token_timeout: int, optional
-    :param quiet: Deprecated.
-    :param debug: Deprecated.
     :param timeout: The timeout of each request in seconds. `None` means no timeout.
     :type timeout: int, optional
     :param retry_max: The number of retries on request failure.
@@ -390,49 +379,29 @@ class Client(object):
     def __init__(
         self,
         config=None,
-        token_timeout=60 * 45,
-        quiet=None,
-        debug=None,
         timeout=None,
         retry_max=500,
         sleep_max=120,
         progress=True,
         max_workers=2,
     ):
-        if quiet is not None:
-            warn(
-                "The 'quiet' argument is deprecated and "
-                "will be removed in a future version. "
-                "Configure the 'hda' logger with a proper log level instead.",
-                category=DeprecationWarning,
-            )
-
-        if debug is not None:
-            warn(
-                "The 'debug' argument is deprecated and "
-                "will be removed in a future version. "
-                "Configure the 'hda' logger with a proper log level instead.",
-                category=DeprecationWarning,
-            )
-
         self.config = config or Configuration()
         self.timeout = timeout
-        self.token_timeout = token_timeout
         self.sleep_max = sleep_max
         self.retry_max = retry_max
         self.progress = progress
         self.max_workers = max_workers
 
         self._session = None
-        self._token = None
-        self._token_creation_time = None
+        self._access_token = None
+        self._refresh_token = None
+        self._token_expiration = None
         self._tqdm_position = cycle(range(self.max_workers))
 
         logger.debug(
             "HDA %s",
             dict(
                 url=self.config.url,
-                token_timeout=self.token_timeout,
                 user=self.config.user,
                 password=self.config.password,
                 verify=self.config.verify,
@@ -457,7 +426,12 @@ class Client(object):
         if len(args) == 1 and args[0].split(":")[0] in ("http", "https"):
             return args[0]
 
-        full = "/".join([str(x) for x in [self.config.url] + list(args)])
+        base_url = self.config.url
+        url_parts = self.config.url.split("/")
+        if url_parts[-2] != "api" and url_parts[-1] != "v1":
+            base_url = urljoin(self.config.url, "api/v1")
+
+        full = "/".join([str(x) for x in [base_url] + list(args)])
         return full
 
     @property
@@ -466,59 +440,73 @@ class Client(object):
         now = int(time.time())
 
         def is_token_expired():
-            return (
-                self._token_creation_time is None
-                or (now - self._token_creation_time) > self.token_timeout
-            )
+            return self._token_expiration is None or now > self._token_expiration
 
         if is_token_expired():
             logger.debug("====== Token expired, renewing")
-            self._token = self.get_token()
-            self._token_creation_time = now
+            payload = self._get_token()
+            self._access_token = payload["access_token"]
+            self._refresh_token = payload["refresh_token"]
+            self._token_expiration = now + payload["expires_in"]
 
-        return self._token
+        return self._access_token
 
     def _invalidate_token(self):
-        self._token_creation_time = None
+        self._token_expiration = None
 
-    def get_token(self):
+    def _get_token(self):
         """Requests a new access token using the configured credentials.
 
         :return: A valid access token.
         :rtype: str
         """
-        session = requests.Session()
-        session.auth = (self.config.user, self.config.password)
-        full = self.full_url("gettoken")
-        logger.debug("===> GET %s", full)
-        r = self.robust(session.get)(full)
-        r.raise_for_status()
-        result = r.json()
-        logger.debug("<=== %s", shorten(result))
-        session.auth = None
-        return result["access_token"]
 
-    def accept_tac(self):
+        def get_new_token():
+            data = {
+                "username": self.config.user,
+                "password": self.config.password,
+            }
+            return requests.post(
+                urljoin(self.config.url, "gettoken"),
+                json=data,
+                verify=self.config.verify,
+            )
+
+        def refresh_token():
+            return requests.post(
+                urljoin(self.config.url, "refreshtoken"),
+                data={"refresh_token": self._refresh_token},
+                verify=self.config.verify,
+            )
+
+        if self._refresh_token is not None:
+            r = refresh_token()
+            if r.status_code in (requests.codes.forbidden, requests.codes.bad_request):
+                r = get_new_token()
+        else:
+            r = get_new_token()
+
+        return r.json()
+
+    def accept_tac(self, dataset_id):
         """Implicitly accept the terms and conditions of the service."""
-        url = "termsaccepted/Copernicus_General_License"
-        result = self.get(url)
-        if not result["accepted"]:
-            logger.debug("TAC not yet accepted")
-            result = self.put({"accepted": True}, url)
-            logger.debug("<=== %s", result)
+        result = self.dataset(dataset_id)
+        tacs = result["terms"]
+        for tac in tacs:
+            logger.debug(f"Accepting {tac}")
+            url = f"termsaccepted/{tac}"
+            self.put({"accepted": True}, url)
 
     @property
     def session(self):
         """The `requests` library session object, with the attached authentication."""
         if self._session is None:
-            session = requests.Session()
-            session.mount("ftp://", FTPAdapter())
-            self._session = session
+            self._session = requests.Session()
         self._attach_auth()
         return self._session
 
     def _attach_auth(self):
-        self._session.headers = {"Authorization": self.token}
+        self._session.headers = {"Authorization": f"Bearer {self.token}"}
         logger.debug("Token is %s", self.token)
 
     def robust(self, call):
@@ -583,33 +571,38 @@ class Client(object):
 
         return wrapped
 
-    def search(self, query):
+    def search(self, query, limit=None):
         """Submits a search request with the given query.
 
         :param query: The JSON object representing the query.
         :type query: json
 
+        :param limit: The maximum number of results to return.
+            Set to None to return all results (default)
+        :type limit: int
+
         :return: An :class:`hda.api.SearchResults` instance
         """
-        self.accept_tac()
-        return SearchResults(self, *DataRequestRunner(self).run(query))
+        # Users can pass in a query in v1 format and we try to convert it
+        # into the new one. If the query is already in v2 format, this is
+        # a no-op.
+        # This might be removed in future version.
+        query = convert(query)
+        assert "dataset_id" in query, "Missing dataset_id, check your query"
+        self.accept_tac(query["dataset_id"])
+        results = SearchPaginator(self.post).run(query=query, limit=limit)
+        return SearchResults(self, list(results), query["dataset_id"])
 
-    def _datasets(self):
-        page = self.get("datasets")
-        for p in page["content"]:
-            yield p
-
-        while page.get("nextPage"):
-            page = self.get(page["nextPage"])
-            for p in page["content"]:
-                yield p
-
-    def datasets(self):
+    def datasets(self, limit=None):
         """Returns the full list of available datasets.
         Each element of the list is a JSON object that includes
         the abstract, the dataset ID and other properties.
+
+        :param limit: The maximum number of results to return.
+            Set to None to return all results (default)
+        :type limit: int
         """
-        return list(self._datasets())
+        return list(DatasetPaginator(self.get).run(limit=limit))
 
     def dataset(self, dataset_id):
         """Returns a JSON object that includes the abstract,
@@ -626,13 +619,13 @@ class Client(object):
         :param dataset_id: The dataset ID
         :type dataset_id: str
         """
-        response = self.get("querymetadata", dataset_id)
+        response = self.get("dataaccess/queryable", dataset_id)
         # Remove extra information only useful on the WEkEO UI
         if "constraints" in response:
             del response["constraints"]
         return response
 
-    def get(self, *args):
+    def get(self, *args, **kwargs):
         """Submits a GET request.
 
         :param args: The list of URL parts.
@@ -643,11 +636,31 @@ class Client(object):
         full = self.full_url(*args)
         logger.debug("===> GET %s", full)
 
-        r = self.robust(self.session.get)(full, timeout=self.timeout)
+        r = self.robust(self.session.get)(
+            full, params=kwargs, verify=self.config.verify, timeout=self.timeout
+        )
         r.raise_for_status()
         result = r.json()
         logger.debug("<=== %s", shorten(result))
         return result
+
+    def head(self, *args):
+        """Submits a HEAD request.
+
+        :param args: The list of URL parts.
+        :type args: list
+
+        :return: A response object
+        """
+        full = self.full_url(*args)
+        logger.debug("===> HEAD %s", full)
+
+        r = self.robust(self.session.head)(
+            full, verify=self.config.verify, timeout=self.timeout
+        )
+        r.raise_for_status()
+        logger.debug("<=== %s", r)
+        return r
 
     def post(self, message, *args):
         """Submits a POST request.
@@ -663,10 +676,11 @@ class Client(object):
         full = self.full_url(*args)
         logger.debug("===> POST %s", full)
         logger.debug("===> POST %s", shorten(message))
-
-        r = self.robust(self.session.post)(full, json=message, timeout=self.timeout)
-        r.raise_for_status()
-        result = r.json()
+        res = self.robust(self.session.post)(
+            full, json=message, verify=self.config.verify, timeout=self.timeout
+        )
+        res.raise_for_status()
+        result = res.json()
         logger.debug("<=== %s", shorten(result))
         return result
 
@@ -685,36 +699,25 @@ class Client(object):
         logger.debug("===> PUT %s", full)
         logger.debug("===> PUT %s", shorten(message))
 
-        r = self.robust(self.session.put)(full, json=message, timeout=self.timeout)
+        r = self.robust(self.session.put)(
+            full, json=message, verify=self.config.verify, timeout=self.timeout
+        )
         r.raise_for_status()
         return r
 
-    def stream(self, target, size, download_dir, *args):
-        """Streams the given target URL into the specified download directory.
+    def stream(self, download_id, size, download_dir):
+        """Streams the given URL into the specified download directory.
         Usually, this method is not called directly but through the
         :py:meth:`~hda.api.Client.download` one.
 
-        :param target: The target of the resource to download.
-            Typically it is the last part of the full URL.
-        :type target: str
+        :param download_id: The download id as returned by the search API.
+        :type download_dir: str
         :param size: The expected size of the resource.
         :type size: int
         :param download_dir: The directory into which the resource must be downloaded.
         :type download_dir: str
-        :param args: A list of URL parts to be joined to the base URL.
         """
-        full = self.full_url(*args)
-
-        filename = target
-        if target.startswith("&"):
-            # For a large number of datasets (mostly from Mercator Ocean),
-            # the provided filename starts with a portion of a query string:
-            # eg: &service=SST_GLO_SST_L4_REP_OBSERVATIONS_010_011-TDS...
-            # It this case, the file name should be retrieved from the
-            # `Location` header of the redirect response.
-            # This mechanism is reusable for other cases, but it is not
-            # always safe - namely not for Cryosat or other ESA datasets.
-            filename = None
+        full = self.full_url(*[f"dataaccess/download/{download_id}"])
 
         if download_dir is None:
             download_dir = "."
@@ -722,9 +725,8 @@ class Client(object):
             os.makedirs(download_dir, exist_ok=True)
 
         logger.info(
-            "Downloading %s to %s (%s)",
+            "Downloading %s (%s)",
             full,
-            filename or "unknown",
             bytes_to_string(size),
         )
         start = time.time()
@@ -747,12 +749,14 @@ class Client(object):
                 r.raise_for_status()
 
                 logger.debug("Headers: %s", r.headers)
+                filename = get_filename(r, download_id)
 
-                if filename is None:
-                    filename = get_filename(r, target)
-
-                # https://github.com/ecmwf/hda/issues/3
-                size = int(r.headers.get("Content-Length", size))
+                try:
+                    # https://github.com/ecmwf/hda/issues/3
+                    size = int(r.headers.get("Content-Length", size))
+                except ValueError:
+                    # For certain datasets, even the header is missins
+                    size = None
 
                 with tqdm(
                     total=size,
@@ -772,20 +776,17 @@ class Client(object):
                                 pbar.update(len(chunk))
 
             except requests.exceptions.ConnectionError as e:
-                logger.error("Download interupted: %s" % (e,))
+                logger.error("Download interrupted: %s" % (e,))
             finally:
                 r.close()
 
-            if total >= size:
+            if size is None or total >= size:
+                size = os.path.getsize(filename)
                 break
 
             logger.error(
                 "Download incomplete, downloaded %s byte(s) out of %s" % (total, size)
             )
-
-            if isinstance(r, FTPAdapter):
-                logger.warning("Ignoring size mismatch")
-                return filename
 
             logger.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)

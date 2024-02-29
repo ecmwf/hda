@@ -73,11 +73,11 @@ def test_mixed_config():
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
 def test_search_results_slicing():
     r = [
-        {"id": 0, "size": 10},
-        {"id": 1, "size": 20},
-        {"id": 2, "size": 30},
-        {"id": 3, "size": 40},
-        {"id": 4, "size": 50},
+        {"id": 0, "properties": {"size": 10}},
+        {"id": 1, "properties": {"size": 20}},
+        {"id": 2, "properties": {"size": 30}},
+        {"id": 3, "properties": {"size": 40}},
+        {"id": 4, "properties": {"size": 50}},
     ]
     s = SearchResults(Client(), r, None)
     assert len(s[0]) == 1
@@ -95,19 +95,12 @@ def test_hda_1():
     c = Client()
 
     r = {
-        "datasetId": "EO:CLMS:DAT:CGLS_CONTINENTS_WB_V1_1KM",
-        "dateRangeSelectValues": [
-            {
-                "name": "dtrange",
-                "start": "2020-04-11T00:00:00.000Z",
-                "end": "2020-05-21T00:00:00.000Z",
-            }
-        ],
+        "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
     }
 
-    matches = c.search(r)
+    matches = c.search(r, limit=10)
     print(matches)
-    assert len(matches.results) > 0, matches
+    assert len(matches.results) == 10, matches
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
@@ -115,20 +108,11 @@ def test_hda_2():
     c = Client()
 
     r = {
-        "datasetId": "EO:ECMWF:DAT:CAMS_EUROPE_AIR_QUALITY_REANALYSES",
-        "multiStringSelectValues": [
-            {"name": "type", "value": ["validated_reanalysis"]},
-            {"name": "variable", "value": ["ammonia"]},
-            {"name": "model", "value": ["chimere"]},
-            {"name": "level", "value": ["0"]},
-            {"name": "month", "value": ["01"]},
-            {"name": "year", "value": ["2018"]},
-        ],
-        "stringChoiceValues": [
-            {"name": "format", "value": "tgz"},
-        ],
+        "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
+        "start": "2019-02-27T08:29:45.644Z",
+        "end": "2019-03-27T08:29:45.644Z",
     }
 
     matches = c.search(r)
-    assert len(matches.results) == 1, matches
-    matches.download()
+    assert len(matches.results) > 0, matches
+    matches[0].download()
