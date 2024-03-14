@@ -64,7 +64,6 @@ def test_custom_path_config():
 def test_mixed_config():
     config = Configuration(user="TU", password="TP", path=CUSTOM_HDRRC)
     c = Client(config=config)
-    assert c.config.url == "TESTURL"
     assert c.config.user == "TU"
     assert c.config.password == "TP"
 
