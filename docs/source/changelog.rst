@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.12
+-----------
+* Removed URL reading from file .hdarc
+
 Version 2.0
 -----------
 * Updated version compatible with HDA v2

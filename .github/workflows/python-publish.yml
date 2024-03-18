@@ -6,7 +6,7 @@ name: Upload Python Package
 on:
 
   push: {}
-  
+
   pull_request: {}
 
   release:
@@ -17,7 +17,7 @@ jobs:
     name: Code QA
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: pip install black flake8 isort
       - run: black --version
       - run: isort --version
@@ -38,7 +38,7 @@ jobs:
     needs: quality
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v2
         with:
@@ -63,7 +63,7 @@ jobs:
     needs: checks
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v2

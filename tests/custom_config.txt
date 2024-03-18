@@ -1,3 +1,2 @@
-url: TESTURL
 user: TESTUSER
 password: TESTPASSWORD
