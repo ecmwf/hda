@@ -15,8 +15,8 @@ project = "WEkEO HDA API Client"
 copyright = "2023, ECMWF"
 author = "ECMWF"
 
-release = "2.12"
-version = "2.12"
+release = "2.13"
+version = "2.13"
 
 # -- General configuration
 
