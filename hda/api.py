@@ -767,7 +767,7 @@ class Client(object):
                                 total += len(chunk)
                                 pbar.update(len(chunk))
 
-            except requests.exceptions.ConnectionError as e:
+            except requests.exceptions.RequestException as e:
                 logger.error("Download interrupted: %s" % (e,))
             finally:
                 r.close()
