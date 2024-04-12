@@ -317,14 +317,12 @@ class Configuration:
         url=os.environ.get("HDA_URL"),
         user=os.environ.get("HDA_USER"),
         password=os.environ.get("HDA_PASSWORD"),
-        verify=None,
+        verify=True,
         path=None,
     ):
         credentials = {
-            "url": url or BROKER_URL,
             "user": None,
-            "password": None,
-            "verify": True,
+            "password": None
         }
 
         dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
@@ -336,25 +334,19 @@ class Configuration:
                 if config.get(key):
                     credentials[key] = config.get(key)
 
-        if url is not None:
-            credentials["url"] = url
-
         if user is not None:
             credentials["user"] = user
 
         if password is not None:
             credentials["password"] = password
 
-        if verify is not None:
-            credentials["verify"] = verify
-
         if credentials["user"] is None or credentials["password"] is None:
             raise ConfigurationError("Missing or incomplete configuration")
 
-        self.url = credentials["url"]
+        self.url = url or BROKER_URL
         self.user = credentials["user"]
         self.password = credentials["password"]
-        self.verify = credentials["verify"]
+        self.verify = verify
 
 
 class Client(object):
@@ -775,7 +767,7 @@ class Client(object):
                                 total += len(chunk)
                                 pbar.update(len(chunk))
 
-            except requests.exceptions.ConnectionError as e:
+            except requests.exceptions.RequestException as e:
                 logger.error("Download interrupted: %s" % (e,))
             finally:
                 r.close()

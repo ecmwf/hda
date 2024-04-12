@@ -1,6 +1,14 @@
 Changelog
 =========
 
+Version 2.13
+-----------
+* Fixed missing exception case that could lead to empty files
+
+Version 2.12
+-----------
+* Removed URL reading from file .hdarc
+
 Version 2.0
 -----------
 * Updated version compatible with HDA v2
