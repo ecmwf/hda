@@ -320,10 +320,7 @@ class Configuration:
         verify=True,
         path=None,
     ):
-        credentials = {
-            "user": None,
-            "password": None
-        }
+        credentials = {"user": None, "password": None}
 
         dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
 
