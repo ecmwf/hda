@@ -84,7 +84,13 @@ def get_filename(response, fallback):
     if cd is None:
         return fallback
 
-    return cd[cd.find("filename=") + len("filename=") :]
+    filename = cd[cd.find("filename=") + len("filename=") :]
+    if filename.startswith('"'):
+        filename = filename[1:]
+    if filename.endswith('"'):
+        filename = filename[:-1]
+
+    return filename
 
 
 class HDAError(Exception):
@@ -262,7 +268,6 @@ class SearchResults:
 
     def _download(self, result, download_dir: str = "."):
         logger.debug(result)
-
         self.client.accept_tac(self.dataset)
 
         query = {
