@@ -15,12 +15,18 @@ Get your credentials
 
 Install the WEkEO HDA client
 ----------------------------
-The WEkEO HDA client is a python based library. It provides support for both Python 2.7.x and Python 3.
+The WEkEO HDA client is a Python 3 based library.
 
-You can Install the WEkEO HDA client via the package management system pip, by running on Unix/Linux the command shown below.
+The package is available both on Pypi and Conda-Forge, so, depending on your requirements you can either install it via pip or via conda:
 
     .. code-block:: shell
 
         pip install hda
+
+or
+
+    .. conda-block:: shell
+
+        conda install conda-forge::hda
 
 This will also install the required dependencies.
