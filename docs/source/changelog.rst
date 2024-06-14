@@ -1,6 +1,18 @@
 Changelog
 =========
 
+Version 2.17
+-----------
+* Added Conda-Forge repository
+
+Version 2.16
+-----------
+* Fixed filename extraction in case of enclosing quotes
+
+Version 2.14
+-----------
+* Improved v1 to v2 payload conversion
+
 Version 2.13
 -----------
 * Fixed missing exception case that could lead to empty files
