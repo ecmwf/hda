@@ -269,19 +269,38 @@ class SearchResults:
     def _download(self, result, download_dir: str = "."):
         logger.debug(result)
         self.client.accept_tac(self.dataset)
-
-        query = {
-            "dataset_id": self.dataset,
-            "product_id": result["id"],
-            "location": result["properties"]["location"],
-        }
-        download_id = DataOrderRequest(self.client).run(query)
-
+        download_id = self._get_download_id(result)
         self.stream(
             download_id,
             result["properties"]["size"],
             download_dir,
         )
+
+    def _get_download_id(self, result):
+        query = {
+            "dataset_id": self.dataset,
+            "product_id": result["id"],
+            "location": result["properties"]["location"],
+        }
+        return DataOrderRequest(self.client).run(query)
+
+    def get_download_urls(self, limit: int = None):
+        """Utility function to return the list of final download URLs.
+        Useful in the context of the Serverless Functions service.
+        If the list of results is long, it might take a long time.
+        In that case, either subset the results or set a value for `limit`.
+        """
+
+        def build_url(result):
+            download_id = self._get_download_id(result)
+            return self.client.full_url(*[f"dataaccess/download/{download_id}"])
+
+        if limit is not None:
+            results = self.results[:limit]
+        else:
+            results = self.results
+
+        return [build_url(r) for r in results]
 
     def download(self, download_dir: str = "."):
         """Downloads the results into the given download directory.
