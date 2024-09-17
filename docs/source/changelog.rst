@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.18
+------------
+* Download URL computation has its own method
+
 Version 2.17
 -----------
 * Added Conda-Forge repository
