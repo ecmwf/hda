@@ -84,7 +84,13 @@ def get_filename(response, fallback):
     if cd is None:
         return fallback
 
-    return cd[cd.find("filename=") + len("filename=") :]
+    filename = cd[cd.find("filename=") + len("filename=") :]
+    if filename.startswith('"'):
+        filename = filename[1:]
+    if filename.endswith('"'):
+        filename = filename[:-1]
+
+    return filename
 
 
 class HDAError(Exception):
@@ -262,21 +268,39 @@ class SearchResults:
 
     def _download(self, result, download_dir: str = "."):
         logger.debug(result)
-
         self.client.accept_tac(self.dataset)
-
-        query = {
-            "dataset_id": self.dataset,
-            "product_id": result["id"],
-            "location": result["properties"]["location"],
-        }
-        download_id = DataOrderRequest(self.client).run(query)
-
+        download_id = self._get_download_id(result)
         self.stream(
             download_id,
             result["properties"]["size"],
             download_dir,
         )
+
+    def _get_download_id(self, result):
+        query = {
+            "dataset_id": self.dataset,
+            "product_id": result["id"],
+            "location": result["properties"]["location"],
+        }
+        return DataOrderRequest(self.client).run(query)
+
+    def get_download_urls(self, limit: int = None):
+        """Utility function to return the list of final download URLs.
+        Useful in the context of the Serverless Functions service.
+        If the list of results is long, it might take a long time.
+        In that case, either subset the results or set a value for `limit`.
+        """
+
+        def build_url(result):
+            download_id = self._get_download_id(result)
+            return self.client.full_url(*[f"dataaccess/download/{download_id}"])
+
+        if limit is not None:
+            results = self.results[:limit]
+        else:
+            results = self.results
+
+        return [build_url(r) for r in results]
 
     def download(self, download_dir: str = "."):
         """Downloads the results into the given download directory.
@@ -317,15 +341,10 @@ class Configuration:
         url=os.environ.get("HDA_URL"),
         user=os.environ.get("HDA_USER"),
         password=os.environ.get("HDA_PASSWORD"),
-        verify=None,
+        verify=True,
         path=None,
     ):
-        credentials = {
-            "url": url or BROKER_URL,
-            "user": None,
-            "password": None,
-            "verify": True,
-        }
+        credentials = {"user": None, "password": None}
 
         dotrc = path or os.environ.get("HDA_RC", os.path.expanduser("~/.hdarc"))
 
@@ -336,25 +355,19 @@ class Configuration:
                 if config.get(key):
                     credentials[key] = config.get(key)
 
-        if url is not None:
-            credentials["url"] = url
-
         if user is not None:
             credentials["user"] = user
 
         if password is not None:
             credentials["password"] = password
 
-        if verify is not None:
-            credentials["verify"] = verify
-
         if credentials["user"] is None or credentials["password"] is None:
             raise ConfigurationError("Missing or incomplete configuration")
 
-        self.url = credentials["url"]
+        self.url = url or BROKER_URL
         self.user = credentials["user"]
         self.password = credentials["password"]
-        self.verify = credentials["verify"]
+        self.verify = verify
 
 
 class Client(object):
@@ -775,7 +788,7 @@ class Client(object):
                                 total += len(chunk)
                                 pbar.update(len(chunk))
 
-            except requests.exceptions.ConnectionError as e:
+            except requests.exceptions.RequestException as e:
                 logger.error("Download interrupted: %s" % (e,))
             finally:
                 r.close()

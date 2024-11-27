@@ -30,7 +30,7 @@ def read(fname):
     return io.open(file_path, encoding="utf-8").read()
 
 
-version = "2.0"
+version = "2.18"
 
 setuptools.setup(
     name="hda",

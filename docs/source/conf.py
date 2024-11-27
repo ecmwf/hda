@@ -15,8 +15,8 @@ project = "WEkEO HDA API Client"
 copyright = "2023, ECMWF"
 author = "ECMWF"
 
-release = "1.14"
-version = "1.14"
+release = "2.18"
+version = "2.18"
 
 # -- General configuration
 
@@ -38,7 +38,7 @@ templates_path = ["_templates"]
 
 # -- Options for HTML output
 
-html_theme = "sphinx_rtd_theme"
+# html_theme = "sphinx_rtd_theme"
 
 # -- Options for EPUB output
 epub_show_urls = "footnote"
