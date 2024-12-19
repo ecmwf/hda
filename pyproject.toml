@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hda"
+version = "2.20"
+description = "API to harmonised data access for DIAS/WEkEO."
+authors = [{ name = "ECMWF", email = "software.support@ecmwf.int" }]
+license = { file = "LICENSE.txt" }
+readme = "README.md"
+requires-python = ">=3.6"
+dependencies = [
+	"requests>=2.5.0",
+    "tqdm"
+]
+urls = { "Homepage" = "https://github.com/ecmwf/hda" }
+keywords = ["API", "data access", "DIAS", "WEkEO"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
