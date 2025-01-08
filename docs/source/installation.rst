@@ -19,13 +19,13 @@ The WEkEO HDA client is a Python 3 based library.
 
 The package is available both on Pypi and Conda-Forge, so, depending on your requirements you can either install it via pip or via conda:
 
-    .. code-block:: shell
+     .. code-block:: shell
 
         pip install hda
 
 or
 
-    .. conda-block:: shell
+    .. code-block:: shell
 
         conda install conda-forge::hda
 
