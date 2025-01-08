@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.21
+------------
+* Updated documentation
+
 Version 2.18
 ------------
 * Download URL computation has its own method
