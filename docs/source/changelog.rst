@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.22
+------------
+* Fixed a bug when specifying a custom download directory
+
 Version 2.21
 ------------
 * Updated documentation
