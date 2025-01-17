@@ -794,7 +794,7 @@ class Client(object):
                 r.close()
 
             if size is None or total >= size:
-                size = os.path.getsize(filename)
+                size = os.path.getsize(os.path.join(download_dir, filename))
                 break
 
             logger.error(
@@ -804,7 +804,7 @@ class Client(object):
             logger.warning("Sleeping %s seconds" % (sleep,))
             time.sleep(sleep)
             mode = "ab"
-            total = os.path.getsize(filename)
+            total = os.path.getsize(os.path.join(download_dir, filename))
             sleep *= 1.5
             if sleep > self.sleep_max:
                 sleep = self.sleep_max
