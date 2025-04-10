@@ -266,14 +266,34 @@ class SearchResults:
         )
         return instance
 
-    def _download(self, result, download_dir: str = "."):
+    def _download(self, result, download_dir: str = ".", force=False):
         logger.debug(result)
+
+        if ('properties' in result and 'location' in result['properties']
+            and 'size' in result['properties']):
+            filename = os.path.basename(result['properties']['location'])
+            size = result['properties']['size']
+            outfile = os.path.join(download_dir, filename)
+            if os.path.exists(outfile):
+                outfile_size = os.stat(outfile).st_size
+
+                if size == outfile_size:
+                    logger.debug('File {} already exists and has the expected size {}'
+                                 .format(outfile, size))
+                if force:
+                    logger.debug('Downloading anyway because force keyword is set')
+                else:
+                    logger.debug('Skipping download, use force=True to download anyway')
+                    return
+
         self.client.accept_tac(self.dataset)
+
         download_id = self._get_download_id(result)
         self.stream(
             download_id,
             result["properties"]["size"],
             download_dir,
+            force=force
         )
 
     def _get_download_id(self, result):
@@ -302,7 +322,7 @@ class SearchResults:
 
         return [build_url(r) for r in results]
 
-    def download(self, download_dir: str = "."):
+    def download(self, download_dir: str = ".", force=False):
         """Downloads the results into the given download directory.
 
         The process is executed concurrently using :py:attr:`hda.api.Client.max_workers` threads.
@@ -310,7 +330,7 @@ class SearchResults:
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.client.max_workers
         ) as executor:
-            executor.map(self._download, self.results, repeat(download_dir))
+            executor.map(self._download, self.results, repeat(download_dir), repeat(force))
 
 
 class Configuration:
@@ -718,7 +738,7 @@ class Client(object):
         r.raise_for_status()
         return r
 
-    def stream(self, download_id, size, download_dir):
+    def stream(self, download_id, size, download_dir, force=False):
         """Streams the given URL into the specified download directory.
         Usually, this method is not called directly but through the
         :py:meth:`~hda.api.Client.download` one.
@@ -771,6 +791,18 @@ class Client(object):
                     # For certain datasets, even the header is missins
                     size = None
 
+                outfile = os.path.join(download_dir, filename)
+                if size is not None and os.path.exists(outfile):
+                    outfile_size = os.stat(outfile).st_size
+                    if size == outfile_size:
+                        logger.debug('File {} already exists and has the expected size {}'
+                                     .format(outfile, size))
+                    if force:
+                        logger.debug('Downloading anyway because force keyword is set')
+                    else:
+                        logger.debug('Skipping download, use force=True to download anyway')
+                        break # breaks out of the while
+
                 with tqdm(
                     total=size,
                     unit_scale=True,
@@ -781,7 +813,7 @@ class Client(object):
                     position=next(self._tqdm_position),
                 ) as pbar:
                     pbar.update(total)
-                    with open(os.path.join(download_dir, filename), mode) as f:
+                    with open(outfile, mode) as f:
                         for chunk in r.iter_content(chunk_size=1024):
                             if chunk:
                                 f.write(chunk)
