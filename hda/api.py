@@ -800,7 +800,7 @@ class Client(object):
                         logger.debug('Downloading anyway because force keyword is set')
                     else:
                         logger.debug('Skipping download, use force=True to download anyway')
-                        break # breaks out of the while
+                        break   # breaks out of the while
                 with tqdm(
                     total=size,
                     unit_scale=True,
