@@ -269,8 +269,7 @@ class SearchResults:
     def _download(self, result, download_dir: str = ".", force=False):
         logger.debug(result)
 
-        if ('properties' in result and 'location' in result['properties']
-            and 'size' in result['properties']):
+        if ('properties' in result and 'location' in result['properties'] and 'size' in result['properties']):
             filename = os.path.basename(result['properties']['location'])
             size = result['properties']['size']
             outfile = os.path.join(download_dir, filename)
@@ -802,7 +801,6 @@ class Client(object):
                     else:
                         logger.debug('Skipping download, use force=True to download anyway')
                         break # breaks out of the while
-
                 with tqdm(
                     total=size,
                     unit_scale=True,
