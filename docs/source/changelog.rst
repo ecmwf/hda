@@ -1,6 +1,14 @@
 Changelog
 =========
 
+Version 2.28
+------------
+* API avoids download if file already exists and has the same size.
+
+Version 2.25
+------------
+* Publish wheels to PyPi
+
 Version 2.22
 ------------
 * Fixed a bug when specifying a custom download directory
