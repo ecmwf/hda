@@ -750,7 +750,9 @@ class Client(object):
         :type download_dir: str
         """
         full = self.full_url(*[f"dataaccess/download/{download_id}"])
-
+        
+        download_dir = os.path.expanduser(download_dir)
+        
         if download_dir is None:
             download_dir = "."
         else:
