@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.30
+-------------
+* path expansion on userhome (os.path.expanduser(download_dir)
+
 Version 2.28
 ------------
 * API avoids download if file already exists and has the same size.
