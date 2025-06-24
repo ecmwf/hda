@@ -1,7 +1,7 @@
 Changelog
 =========
 
-Version 2.30
+Version 2.32
 -------------
 * path expansion on userhome (os.path.expanduser(download_dir)
 
