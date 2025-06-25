@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hda"
-version = "2.33"
+version = "2.34"
 description = "API to harmonised data access for DIAS/WEkEO."
 authors = [{ name = "ECMWF", email = "software.support@ecmwf.int" }]
 license = { file = "LICENSE.txt" }
