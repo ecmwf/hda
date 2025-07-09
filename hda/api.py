@@ -630,6 +630,10 @@ class Client(object):
         else:
             logger.debug("No product type given, looking for all in %s", query["dataset_id"])
             product_types = self.product_types(query["dataset_id"])
+            if product_types is None:
+                logger.debug("No product types found for dataset, running query as is %s", query["dataset_id"])
+                results = SearchPaginator(self.post).run(query=query, limit=limit)
+                return SearchResults(self, list(results), query["dataset_id"])        
             product_key, layers = *product_types.keys(), *product_types.values()
             logger.debug("Found layers %s", layers)
             results = []
