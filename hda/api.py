@@ -637,12 +637,12 @@ class Client(object):
                 if limit is not None and len(results) >= limit:
                     break
                 logger.debug("Searching for layer %s", layer)
-                _query = query.copy(); _query.update({product_key: layer})
+                _query = query.copy()
+                _query.update({product_key: layer})
                 results += list(SearchPaginator(self.post).run(query=_query, limit=limit))
-            
+
             results = results[:limit] if limit is not None else results
             return SearchResults(self, results, query["dataset_id"])
-            
 
     def datasets(self, limit=None):
         """Returns the full list of available datasets.
@@ -700,11 +700,10 @@ class Client(object):
         # only do this if everything is a dict the props are set
         if (not isinstance(meta, dict)
             and 'properties' not in meta.keys()
-            and not isinstance(meta['properties'], dict)
-           ):
+            and not isinstance(meta['properties'], dict)):
             return result
-        
-        product_key = None    
+
+        product_key = None
         # have to figure out the actual product key, could also use regex
         # but the number of property entries are limited in any case
         for key in meta['properties'].keys():
@@ -714,7 +713,7 @@ class Client(object):
                 product_key = key
                 # do not look for another product type (hopefully correct)
                 break
-                           
+
         if product_key is None:
             return result
         else:
