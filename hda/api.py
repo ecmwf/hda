@@ -719,7 +719,8 @@ class Client(object):
             return result
         else:
             product_types = meta['properties'][product_key]
-            product_types = [i.get('const', None) for i in product_types.get('oneOf', {})]]
+            product_types = [i.get('const', None) for i in product_types.get('oneOf', {})]
+            product_types = sorted([i for i in product_types if i is not None])
             return {product_key: product_types}
 
     def get(self, *args, **kwargs):
