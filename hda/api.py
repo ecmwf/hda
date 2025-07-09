@@ -622,8 +622,27 @@ class Client(object):
         query = convert(query)
         assert "dataset_id" in query, "Missing dataset_id, check your query"
         self.accept_tac(query["dataset_id"])
-        results = SearchPaginator(self.post).run(query=query, limit=limit)
-        return SearchResults(self, list(results), query["dataset_id"])
+        product_key_included = [i for i in query.keys() if 'product' in i.lower() and 'type' in i.lower()]
+        if product_key_included:
+            logger.debug("Product type given, looking for %s", product_key_included[0])
+            results = SearchPaginator(self.post).run(query=query, limit=limit)
+            return SearchResults(self, list(results), query["dataset_id"])
+        else:
+            logger.debug("No product type given, looking for all in %s", query["dataset_id"])
+            product_types = self.product_types(query["dataset_id"])
+            product_key, layers = *product_types.keys(), *product_types.values()
+            logger.debug("Found layers %s", layers)
+            results = []
+            for layer in layers:
+                if limit is not None and len(results) >= limit:
+                    break
+                logger.debug("Searching for layer %s", layer)
+                _query = query.copy(); _query.update({product_key: layer})
+                results += list(SearchPaginator(self.post).run(query=_query, limit=limit))
+            
+            results = results[:limit] if limit is not None else results
+            return SearchResults(self, results, query["dataset_id"])
+            
 
     def datasets(self, limit=None):
         """Returns the full list of available datasets.
