@@ -656,6 +656,52 @@ class Client(object):
         if "constraints" in response:
             del response["constraints"]
         return response
+        
+    def product_types(self, dataset_id):
+        """Returns a dict of the form {product_type_key: product types}
+        available for a given dataset with the dataset_id as the 
+        product_type_key varies between different datasets. Intended
+        to be used in conjunction with a search for specific product
+        types afterwards.
+        Returns an empty dict if no product types could be found. 
+        It internally uses the metadata(dataset_id) function to 
+        retrieve the product types, which might change in the future. 
+        Example usage:
+        import hda
+        client = hda.client()
+        dataset_id = 'EO:EEA:DAT:HRL:GRA'
+        product_types = client.product_types(dataset_id)
+        print(f"Product types for {dataset_id}: {product_types}")
+        
+        :params dataset_id: The dataset ID
+        :type dataset_id: str
+        """
+        dataset_id, result = dataset_id.strip().upper(), {}
+        meta = self.metadata(dataset_id)
+        # only do this if everything is a dict the props are set
+        if (not isinstance(meta, dict)
+            and 'properties' not in meta.keys()
+            and not isinstance(meta['properties'], dict)
+           ):
+            return result
+        
+        product_key = None    
+        # have to figure out the actual product key, could also use regex
+        # but the number of property entries are limited in any case
+        for key in meta['properties'].keys():
+            # make comparison case insensitive
+            _key = key.lower()
+            if _key.startswith('product') and 'type' in _key:
+                product_key = key
+                # do not look for another product type (hopefully correct)
+                break
+                           
+        if product_key is None:
+            return result
+        else:
+            product_types = meta['properties'][product_key]
+            product_types = [i.get('const', None) for i in product_types.get('oneOf', {})]]
+            return {product_key: product_types}
 
     def get(self, *args, **kwargs):
         """Submits a GET request.
