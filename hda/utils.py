@@ -1,6 +1,42 @@
 import logging
+from datetime import datetime
+
+import requests
 
 logger = logging.getLogger(__name__)
+
+
+def bytes_to_string(n: int) -> str:
+    """Return a human-readable string."""
+    try:
+        int(n)
+    except ValueError:
+        return str(n)
+
+    u = ["", "KB", "MB", "GB", "TB", "PB"]
+    i = 0
+    while n >= 1024:
+        n /= 1024.0
+        i += 1
+    return "%g%s" % (int(n * 10 + 0.5) / 10.0, u[i])
+
+
+def build_quota_hit_message(response: requests.Response) -> str:
+    """Build a message for the QuotaReachedError exception."""
+    if "X-Quota-Limit" not in response.headers:
+        return "Max quota reached. Please wait before submitting a new request."
+
+    limit = response.headers.get("X-Quota-Limit", "0")
+    remaining = response.headers.get("X-Quota-Remaining", " 0")
+    reset = response.headers.get("X-Quota-Reset", 0)
+
+    msg = (
+        f"{remaining} requests remaining out of {limit}. "
+        f"Please wait until {datetime.fromtimestamp(int(reset))} "
+        f"to submit a new request."
+    )
+    return msg
+
 
 DATASET_MAPPING = {
     "EO:CLMS:DAT:CGLS_DAILY10_LST_DC_GLOBAL_V1": "EO:CLMS:DAT:CLMS_GLOBAL_LST_5KM_V1_10DAILY-DAILY-CYCLE_NETCDF",

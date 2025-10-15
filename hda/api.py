@@ -25,12 +25,13 @@ import os
 import time
 from enum import Enum
 from itertools import cycle, repeat
+from typing import Optional
 from urllib.parse import urljoin
 
 import requests
 from tqdm import tqdm
 
-from hda.utils import convert
+from hda.utils import build_quota_hit_message, bytes_to_string, convert
 
 BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
 ITEMS_PER_PAGE = 100
@@ -43,21 +44,8 @@ class RequestType(Enum):
     POST = 2
 
 
-def bytes_to_string(n):
-    try:
-        int(n)
-    except ValueError:
-        return n
-
-    u = ["", "KB", "MB", "GB", "TB", "PB"]
-    i = 0
-    while n >= 1024:
-        n /= 1024.0
-        i += 1
-    return "%g%s" % (int(n * 10 + 0.5) / 10.0, u[i])
-
-
-def read_config(path):
+def read_config(path: str) -> dict:
+    """Read the configuration file ad 'path'"""
     config = {}
     with open(path) as f:
         for line in f.readlines():
@@ -106,6 +94,10 @@ class RequestFailedError(HDAError):
 
 
 class DownloadSizeError(HDAError):
+    pass
+
+
+class QuotaReachedError(HDAError):
     pass
 
 
@@ -269,30 +261,34 @@ class SearchResults:
     def _download(self, result, download_dir: str = ".", force=False):
         logger.debug(result)
 
-        if ('properties' in result and 'location' in result['properties'] and 'size' in result['properties']):
-            filename = os.path.basename(result['properties']['location'])
-            size = result['properties']['size']
+        if (
+            "properties" in result
+            and "location" in result["properties"]
+            and "size" in result["properties"]
+        ):
+            filename = os.path.basename(result["properties"]["location"])
+            size = result["properties"]["size"]
             outfile = os.path.join(download_dir, filename)
             if os.path.exists(outfile):
                 outfile_size = os.stat(outfile).st_size
 
                 if size == outfile_size:
-                    logger.debug('File {} already exists and has the expected size {}'
-                                 .format(outfile, size))
+                    logger.debug(
+                        "File {} already exists and has the expected size {}".format(
+                            outfile, size
+                        )
+                    )
                 if force:
-                    logger.debug('Downloading anyway because force keyword is set')
+                    logger.debug("Downloading anyway because force keyword is set")
                 else:
-                    logger.debug('Skipping download, use force=True to download anyway')
+                    logger.debug("Skipping download, use force=True to download anyway")
                     return
 
         self.client.accept_tac(self.dataset)
 
         download_id = self._get_download_id(result)
         self.stream(
-            download_id,
-            result["properties"]["size"],
-            download_dir,
-            force=force
+            download_id, result["properties"]["size"], download_dir, force=force
         )
 
     def _get_download_id(self, result):
@@ -303,7 +299,7 @@ class SearchResults:
         }
         return DataOrderRequest(self.client).run(query)
 
-    def get_download_urls(self, limit: int = None):
+    def get_download_urls(self, limit: Optional[int] = None):
         """Utility function to return the list of final download URLs.
         Useful in the context of the Serverless Functions service.
         If the list of results is long, it might take a long time.
@@ -329,7 +325,9 @@ class SearchResults:
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.client.max_workers
         ) as executor:
-            executor.map(self._download, self.results, repeat(download_dir), repeat(force))
+            executor.map(
+                self._download, self.results, repeat(download_dir), repeat(force)
+            )
 
 
 class Configuration:
@@ -389,7 +387,7 @@ class Configuration:
         self.verify = verify
 
 
-class Client(object):
+class Client:
     """HTTP client to request data from the WEkEO HDA API.
 
     :param config: A :class:`hda.api.Configuration` instance.
@@ -585,6 +583,10 @@ class Client(object):
                         tries = self.retry_max
                         logger.debug("Trying to renew the token")
                         self._invalidate_token()
+                    elif r.status_code == requests.codes.too_many_requests:
+                        msg = build_quota_hit_message(r)
+                        logger.warning(msg)
+                        raise QuotaReachedError(msg)
 
                     logger.warning(
                         "Recovering from HTTP error [%s %s], attempt %s of %s",
@@ -794,13 +796,19 @@ class Client(object):
                 if size is not None and os.path.exists(outfile):
                     outfile_size = os.stat(outfile).st_size
                     if size == outfile_size:
-                        logger.debug('File {} already exists and has the expected size {}'
-                                     .format(outfile, size))
+                        logger.debug(
+                            "File {} already exists and has the expected size {}".format(
+                                outfile, size
+                            )
+                        )
                     if force:
-                        logger.debug('Downloading anyway because force keyword is set')
+                        logger.debug("Downloading anyway because force keyword is set")
                     else:
-                        logger.debug('Skipping download, use force=True to download anyway')
-                        break   # breaks out of the while
+                        logger.debug(
+                            "Skipping download, use force=True to download anyway"
+                        )
+                        break  # breaks out of the while
+
                 with tqdm(
                     total=size,
                     unit_scale=True,
