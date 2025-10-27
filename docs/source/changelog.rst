@@ -1,8 +1,21 @@
 Changelog
 =========
 
+Version 2.35
+------------
+* Improved quota-reached notification
+* Added testing for Python 3.12
+
+Version 2.34
+------------
+* Updated publish on Conda
+
+Version 2.33
+------------
+* path expansion on userhome (os.path.expanduser(download_dir)
+
 Version 2.32
--------------
+------------
 * path expansion on userhome (os.path.expanduser(download_dir)
 
 Version 2.28
