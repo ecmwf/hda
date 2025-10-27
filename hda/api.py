@@ -752,25 +752,22 @@ class Client:
         :type download_dir: str
         """
         full = self.full_url(*[f"dataaccess/download/{download_id}"])
-
+        download_dir = os.path.expanduser(download_dir)
         if download_dir is None:
             download_dir = "."
         else:
             os.makedirs(download_dir, exist_ok=True)
-
         logger.info(
             "Downloading %s (%s)",
             full,
             bytes_to_string(size),
         )
         start = time.time()
-
         mode = "wb"
         total = 0
         sleep = 10
         tries = 0
         headers = None
-
         while tries < self.retry_max:
             r = self.robust(self.session.get)(
                 full,
