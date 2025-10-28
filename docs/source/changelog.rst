@@ -4,7 +4,6 @@ Changelog
 Version 2.35
 ------------
 * Improved quota-reached notification
-* Added testing for Python 3.12
 
 Version 2.34
 ------------
