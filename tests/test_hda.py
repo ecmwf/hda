@@ -17,11 +17,12 @@
 # does it submit to any jurisdiction.
 
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from hda import Client, Configuration
-from hda.api import SearchResults
+from hda.api import QuotaReachedError, SearchResults
 
 NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
     "HDA_USER" not in os.environ or "HDA_PASSWORD" not in os.environ
@@ -114,3 +115,23 @@ def test_hda_2():
     matches = c.search(r)
     assert len(matches.results) > 0, matches
     matches[0].download()
+
+
+@patch("hda.api.Client.session")
+def test_quota_reached(mock_session):
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.headers = {
+        "X-Quota-Limit": "100",
+        "X-Quota-Remaining": "75",
+        "X-Quota-Reset": "1700000000",
+    }
+    mock_session.get.return_value = mock_response
+    config = Configuration(user="TU", password="TP")
+    c = Client(config=config)
+    with pytest.raises(QuotaReachedError):
+        c.search(
+            {
+                "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
+            }
+        )
