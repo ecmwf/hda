@@ -49,6 +49,9 @@ setuptools.setup(
         "requests>=2.5.0",
         "tqdm",
     ],
+    extras_require={
+        "s3": ["boto3>=1.17"],
+    },
     zip_safe=True,
     classifiers=[
         "Development Status :: 3 - Alpha",
