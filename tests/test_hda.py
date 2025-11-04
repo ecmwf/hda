@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hda import Client, Configuration
-from hda.api import SearchResults
+from hda.api import SearchResults, S3InitializeError
 
 NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
     "HDA_USER" not in os.environ or "HDA_PASSWORD" not in os.environ
@@ -174,17 +174,19 @@ def test_s3_upload_called(monkeypatch, fresh_hda_api):
     monkeypatch.setattr(client, "_session", mock_session)
 
     s3_client_mock = MagicMock()
-    monkeypatch.setattr(fresh_hda_api.boto3, "client", lambda *_: s3_client_mock)
+    monkeypatch.setattr(fresh_hda_api.boto3, "client", lambda *_, **__: s3_client_mock)
+    s3_client_mock.create_multipart_upload.side_effect = S3InitializeError()
 
-    client.stream(
-        download_id="id123",
-        size=6,
-        to_s3=True,
-        s3_bucket="bucket",
-        s3_key_prefix="test/",
-    )
+    with pytest.raises(fresh_hda_api.DownloadSizeError):
+        client.stream(
+            download_id="id123",
+            size=6,
+            to_s3=True,
+            s3_bucket="bucket",
+            s3_key_prefix="test/",
+        )
 
-    s3_client_mock.upload_fileobj.assert_called()
+    s3_client_mock.create_multipart_upload.assert_called_once()
 
 
 def test_quota_reached(monkeypatch, fresh_hda_api):
