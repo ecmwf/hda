@@ -801,13 +801,13 @@ class Client:
                                 outfile, size
                             )
                         )
-                    if force:
-                        logger.debug("Downloading anyway because force keyword is set")
-                    else:
-                        logger.debug(
-                            "Skipping download, use force=True to download anyway"
-                        )
-                        break  # breaks out of the while
+                        if force:
+                            logger.debug("Downloading anyway because force keyword is set")
+                        else:
+                            logger.debug(
+                                "Skipping download, use force=True to download anyway"
+                            )
+                            break  # breaks out of the while
 
                 with tqdm(
                     total=size,
