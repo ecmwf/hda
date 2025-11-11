@@ -440,7 +440,7 @@ class SearchResults:
         s3_secret_access_key=None,
         s3_verify_ssl=True,
     ):
-        """Downloads the results into the given download directory.
+        """Downloads the results into the given download directory or S3 bucket.
 
         The process is executed concurrently using :py:attr:`hda.api.Client.max_workers` threads.
         """
@@ -1073,9 +1073,9 @@ class Client:
         s3_secret_access_key: Optional[str] = None,
         s3_verify_ssl=True,
     ):
-        """Streams the given URL into the specified download directory.
-        Usually, this method is not called directly but through the
-        :py:meth:`~hda.api.Client.download` one.
+        """Streams the given URL into the specified download directory or S3 bucket.
+        Usually, this is not called directly but through the
+        :py:meth:`~hda.api.Client.download` method.
 
         :param download_id: The download id as returned by the search API.
         :type download_dir: str
@@ -1085,7 +1085,7 @@ class Client:
         :type download_dir: str, optional
         :param force: Whether to override the product if a local file already exists.
         :type force: bool, optional
-        :param to_s3: Whether to download the product directly to S3.
+        :param to_s3: Whether to download the product directly to S3 (needs optional dependencies).
         :type s3: bool, optional
         :param s3_bucket: The S3 bucket to stream the product to.
         :type s3_bucket: str
