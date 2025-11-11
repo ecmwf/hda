@@ -617,6 +617,9 @@ class Client:
         if is_token_expired():
             logger.debug("====== Token expired, renewing")
             payload = self._get_token()
+            if 'error' in payload:
+                logger.debug("Token payload: %s", shorten(payload))
+                raise ConfigurationError(payload["error_description"])
             self._access_token = payload["access_token"]
             self._refresh_token = payload["refresh_token"]
             self._token_expiration = now + payload["expires_in"]
