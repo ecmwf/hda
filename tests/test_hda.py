@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hda import Client, Configuration
-from hda.api import SearchResults, S3InitializeError
+from hda.api import S3InitializeError, SearchResults
 
 NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
     "HDA_USER" not in os.environ or "HDA_PASSWORD" not in os.environ
@@ -36,8 +36,9 @@ CUSTOM_HDRRC = os.path.join(BASE_DIR, "tests/custom_config.txt")
 
 @pytest.fixture
 def fresh_hda_api():
-    import hda.api
     from importlib import reload
+
+    import hda.api
 
     return reload(hda.api)
 
@@ -128,6 +129,7 @@ def test_has_s3_false_when_boto3_missing(monkeypatch):
         importlib.invalidate_caches()
         # Force reload to retry imports
         from importlib import reload
+
         import hda.api
 
         reload(hda.api)
