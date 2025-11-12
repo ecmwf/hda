@@ -1,6 +1,10 @@
 Changelog
 =========
 
+Version 2.36
+------------
+* Added optional S3 support
+
 Version 2.35
 ------------
 * Improved quota-reached notification
@@ -38,23 +42,23 @@ Version 2.18
 * Download URL computation has its own method
 
 Version 2.17
------------
+------------
 * Added Conda-Forge repository
 
 Version 2.16
------------
+------------
 * Fixed filename extraction in case of enclosing quotes
 
 Version 2.14
------------
+------------
 * Improved v1 to v2 payload conversion
 
 Version 2.13
------------
+------------
 * Fixed missing exception case that could lead to empty files
 
 Version 2.12
------------
+------------
 * Removed URL reading from file .hdarc
 
 Version 2.0
@@ -62,15 +66,15 @@ Version 2.0
 * Updated version compatible with HDA v2
 
 Version 1.14
--------------
+------------
 * The `download_dir` is created automatically
 
 Version 1.13
--------------
+------------
 * Minor documentation fixes
 
 Version 1.12
--------------
+------------
 * Refactored client configuration
 * Logging system is now left to the developer
 * Concurrent downloads

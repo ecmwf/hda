@@ -30,3 +30,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules"
 ]
+
+[project.optional-dependencies]
+s3 = ["boto3>=1.17"]

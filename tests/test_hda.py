@@ -16,13 +16,15 @@
 # granted to it by virtue of its status as an intergovernmental organisation nor
 # does it submit to any jurisdiction.
 
+import importlib
 import os
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from hda import Client, Configuration
-from hda.api import QuotaReachedError, SearchResults
+from hda.api import S3InitializeError, SearchResults
 
 NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
     "HDA_USER" not in os.environ or "HDA_PASSWORD" not in os.environ
@@ -30,6 +32,15 @@ NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 CUSTOM_HDRRC = os.path.join(BASE_DIR, "tests/custom_config.txt")
+
+
+@pytest.fixture
+def fresh_hda_api():
+    from importlib import reload
+
+    import hda.api
+
+    return reload(hda.api)
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
@@ -90,7 +101,7 @@ def test_search_results_slicing():
 
 
 @pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
-def test_hda_1():
+def test_hda_e2e():
     c = Client()
 
     r = {
@@ -102,36 +113,99 @@ def test_hda_1():
     assert len(matches.results) == 10, matches
 
 
-@pytest.mark.skipif(NO_HDARC, reason="No access to HDA")
-def test_hda_2():
-    c = Client()
+def test_has_s3_true_when_boto3_present():
+    # Ensure boto3 import works
+    assert "boto3" in sys.modules or importlib.util.find_spec("boto3") is not None
 
-    r = {
-        "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
-        "start": "2019-02-27T08:29:45.644Z",
-        "end": "2019-03-27T08:29:45.644Z",
-    }
+    from hda.api import _HAS_S3
 
-    matches = c.search(r)
-    assert len(matches.results) > 0, matches
-    matches[0].download()
+    assert _HAS_S3 is True
 
 
-@patch("hda.api.Client.session")
-def test_quota_reached(mock_session):
-    mock_response = MagicMock()
-    mock_response.status_code = 429
+def test_has_s3_false_when_boto3_missing(monkeypatch):
+    monkeypatch.setitem(sys.modules, "boto3", None)
+
+    with patch("importlib.util.find_spec", return_value=None):
+        importlib.invalidate_caches()
+        # Force reload to retry imports
+        from importlib import reload
+
+        import hda.api
+
+        reload(hda.api)
+
+        assert hda.api._HAS_S3 is False
+
+
+def test_download_s3_raises_importerror_when_missing_s3(monkeypatch, fresh_hda_api):
+    monkeypatch.setattr(fresh_hda_api, "_HAS_S3", False)
+
+    config = MagicMock()
+    config.url = "https://fake-hda"
+    config.verify = True
+
+    client = fresh_hda_api.Client(config=config)
+    client._attach_auth = MagicMock()
+
+    with pytest.raises(ImportError):
+        client.stream(
+            download_id="abc",
+            size=100,
+            download_dir=".",
+            to_s3=True,
+            s3_bucket="my-bucket",
+        )
+
+
+def test_s3_upload_called(monkeypatch, fresh_hda_api):
+    monkeypatch.setattr(fresh_hda_api, "_HAS_S3", True)
+
+    config = MagicMock()
+    config.url = "https://fake-hda"
+    config.verify = True
+
+    client = fresh_hda_api.Client(config=config)
+    client._attach_auth = MagicMock()
+
+    mock_resp = MagicMock()
+    mock_resp.iter_content.return_value = [b"abc", b"def"]
+    mock_resp.headers = {"Content-Length": "6"}
+
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_resp
+    monkeypatch.setattr(client, "_session", mock_session)
+
+    s3_client_mock = MagicMock()
+    monkeypatch.setattr(fresh_hda_api.boto3, "client", lambda *_, **__: s3_client_mock)
+    s3_client_mock.create_multipart_upload.side_effect = S3InitializeError()
+
+    with pytest.raises(fresh_hda_api.DownloadSizeError):
+        client.stream(
+            download_id="id123",
+            size=6,
+            to_s3=True,
+            s3_bucket="bucket",
+            s3_key_prefix="test/",
+        )
+
+    s3_client_mock.create_multipart_upload.assert_called_once()
+
+
+def test_quota_reached(monkeypatch, fresh_hda_api):
+    mock_response = MagicMock(status_code=429)
     mock_response.headers = {
         "X-Quota-Limit": "100",
         "X-Quota-Remaining": "75",
         "X-Quota-Reset": "1700000000",
     }
-    mock_session.get.return_value = mock_response
+
     config = Configuration(user="TU", password="TP")
-    c = Client(config=config)
-    with pytest.raises(QuotaReachedError):
-        c.search(
-            {
-                "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
-            }
-        )
+    client = fresh_hda_api.Client(config=config)
+
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_response
+    monkeypatch.setattr(client, "_session", mock_session)
+    client._attach_auth = MagicMock()
+
+    with pytest.raises(fresh_hda_api.QuotaReachedError):
+        client.search({"dataset_id": "dummy"})

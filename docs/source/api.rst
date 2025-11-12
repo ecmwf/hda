@@ -5,10 +5,14 @@ API
 
 .. autoattribute:: hda.api.BROKER_URL
 
-.. autoclass:: RequestRunner
+.. autoclass:: Paginator
    :members:
 
-.. autoclass:: DataRequestRunner
+.. autoclass:: SearchPaginator
+   :show-inheritance:
+   :members:
+
+.. autoclass:: DatasetPaginator
    :show-inheritance:
    :members:
 
