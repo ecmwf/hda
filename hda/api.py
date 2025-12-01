@@ -1297,11 +1297,7 @@ class Client:
                     size = content_size  # Use the accurate size for final checks
                     break
 
-            except (
-                requests.exceptions.RequestException,
-                RuntimeError,
-                DownloadSizeError,
-            ) as e:
+            except ( requests.exceptions.RequestException, RuntimeError, DownloadSizeError ) as e:
                 logger.error("Download interrupted: %s" % (e,))
                 print("Download interrupted: %s" % (e,))
                 if tries >= self.retry_max:
