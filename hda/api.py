@@ -1248,6 +1248,51 @@ class Client:
 
                 total_downloaded += downloaded_in_session
 
+                try:
+                    # https://github.com/ecmwf/hda/issues/3
+                    size = int(r.headers.get("Content-Length", size))
+                except ValueError:
+                    # For certain datasets, even the header is missins
+                    size = None
+
+                outfile = os.path.join(download_dir, filename)
+                if size is not None and os.path.exists(outfile):
+                    outfile_size = os.stat(outfile).st_size
+                    if size == outfile_size:
+                        logger.debug(
+                            "File {} already exists and has the expected size {}".format(
+                                outfile, size
+                            )
+                        )
+                        if force:
+                            logger.debug("Downloading anyway because force keyword is set")
+                        else:
+                            logger.debug(
+                                "Skipping download, use force=True to download anyway"
+                            )
+                            break  # breaks out of the while
+
+                with tqdm(
+                    total=size,
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    unit="B",
+                    disable=not self.progress,
+                    leave=False,
+                    position=next(self._tqdm_position),
+                ) as pbar:
+                    pbar.update(total)
+                    with open(outfile, mode) as f:
+                        for chunk in r.iter_content(chunk_size=1024):
+                            if chunk:
+                                f.write(chunk)
+                                total += len(chunk)
+                                pbar.update(len(chunk))
+
+            except requests.exceptions.RequestException as e:
+                logger.error("Download interrupted: %s" % (e,))
+            finally:
+                r.close()
                 if content_size is None or total_downloaded >= content_size:
                     size = content_size  # Use the accurate size for final checks
                     break
