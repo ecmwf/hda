@@ -769,8 +769,31 @@ class Client:
         query = convert(query)
         assert "dataset_id" in query, "Missing dataset_id, check your query"
         self.accept_tac(query["dataset_id"])
-        results = SearchPaginator(self.post).run(query=query, limit=limit)
-        return SearchResults(self, list(results), query["dataset_id"])
+        product_key_included = [i for i in query.keys() if 'product' in i.lower() and 'type' in i.lower()]
+        if product_key_included:
+            logger.debug("Product type given, looking for %s", product_key_included[0])
+            results = SearchPaginator(self.post).run(query=query, limit=limit)
+            return SearchResults(self, list(results), query["dataset_id"])
+        else:
+            logger.debug("No product type given, looking for all in %s", query["dataset_id"])
+            product_types = self.product_types(query["dataset_id"])
+            if product_types is None:
+                logger.debug("No product types found for dataset, running query as is %s", query["dataset_id"])
+                results = SearchPaginator(self.post).run(query=query, limit=limit)
+                return SearchResults(self, list(results), query["dataset_id"])
+            product_key, layers = *product_types.keys(), *product_types.values()
+            logger.debug("Found layers %s", layers)
+            results = []
+            for layer in layers:
+                if limit is not None and len(results) >= limit:
+                    break
+                logger.debug("Searching for layer %s", layer)
+                _query = query.copy()
+                _query.update({product_key: layer})
+                results += list(SearchPaginator(self.post).run(query=_query, limit=limit))
+
+            results = results[:limit] if limit is not None else results
+            return SearchResults(self, results, query["dataset_id"])
 
     def datasets(self, limit=None):
         """Returns the full list of available datasets.
@@ -803,6 +826,51 @@ class Client:
         if "constraints" in response:
             del response["constraints"]
         return response
+
+    def product_types(self, dataset_id):
+        """Returns a dict of the form {product_type_key: product types}
+        available for a given dataset with the dataset_id as the
+        product_type_key varies between different datasets. Intended
+        to be used in conjunction with a search for specific product
+        types afterwards.
+        Returns an empty dict if no product types could be found.
+        It internally uses the metadata(dataset_id) function to
+        retrieve the product types, which might change in the future.
+        :params dataset_id: The dataset ID
+        :type dataset_id: str
+        Example usage:
+        import hda
+        client = hda.client()
+        dataset_id = 'EO:EEA:DAT:HRL:GRA'
+        product_types = client.product_types(dataset_id)
+        print(f"Product types for {dataset_id}: {product_types}")
+        """
+        dataset_id, result = dataset_id.strip().upper(), {}
+        meta = self.metadata(dataset_id)
+        # only do this if everything is a dict the props are set
+        if (not isinstance(meta, dict)
+                and 'properties' not in meta.keys()
+                and not isinstance(meta['properties'], dict)):
+            return result
+
+        product_key = None
+        # have to figure out the actual product key, could also use regex
+        # but the number of property entries are limited in any case
+        for key in meta['properties'].keys():
+            # make comparison case insensitive
+            _key = key.lower()
+            if _key.startswith('product') and 'type' in _key:
+                product_key = key
+                # do not look for another product type (hopefully correct)
+                break
+
+        if product_key is None:
+            return result
+        else:
+            product_types = meta['properties'][product_key]
+            product_types = [i.get('const', None) for i in product_types.get('oneOf', {})]
+            product_types = sorted([i for i in product_types if i is not None])
+            return {product_key: product_types}
 
     def get(self, *args, **kwargs):
         """Submits a GET request.
