@@ -1,0 +1,74 @@
+S3 Integration
+==============
+
+Version 2.36 introduces optional support for direct upload to S3.
+
+To install the necessary dependencies, run:
+
+    .. code-block:: shell
+
+       pip install hda[s3]
+
+
+The client supports Amazon AWS S3 as well as compatible services such as MinIO.
+
+Credentials
+-----------
+
+There are two ways to provide credentials for accessing your S3 account:
+
+1. Use a `$HOME/.aws/credentials` file to specify your `aws_access_key_id` and `aws_secret_access_key`:
+
+.. code-block:: shell
+
+    [default]
+    aws_access_key_id=XXXX
+    aws_secret_access_key=YYYY
+
+2. Pass credentials directly to the `Client.download` method, as shown in the examples below
+
+Usage
+-----
+
+If your `$HOME/.aws/credentials` file is configured, you can just enable the `to_s3` flag and specify the `s3_bucket` name:
+
+.. code-block:: python
+
+    c = Client()
+
+    query = {...}
+    matches = c.search(query)
+    matches.download(to_s3=True, s3_bucket="my-bucket")
+
+Alternatively, you can pass credentials directly to the method:
+
+.. code-block:: python
+
+    c = Client()
+
+    query = {...}
+    matches = c.search(query)
+    matches.download(
+        to_s3=True,
+        s3_bucket="my-bucket",
+        s3_access_key_id="XXXX",
+        s3_secret_access_key="YYYY"
+    )
+
+Below is an example showing all available parameters:
+
+.. code-block:: python
+
+    c = Client()
+
+    query = {...}
+    matches = c.search(query)
+    matches.download(
+        to_s3=True,
+        s3_bucket="my-bucket",  # Bucket name
+        s3_key_prefix="my-prefix",  # Prefix for the final object key
+        s3_access_key_id="XXXX",
+        s3_secret_access_key="YYYY",
+        s3_endpoint="https://my.minio.org"  # Set a custom endpoint if not using AWS
+        s3_verify_ssl=False,  # Disable SSL verification for internal endpoints
+    )

@@ -11,18 +11,19 @@ Check out the :doc:`usage </usage>` section for further information, including
 how to :doc:`install </installation>` the project.
 
 .. warning::
-   The latest version only supports HDA v2. If you need to interact with HDA v1, please refer to version 1.14, which is the last compatible one.
-   Keep in mind that HDA v1 will be decommissioned in Q2 2024.
+   Starting from version 2.0, the client supports HDA v2 only. If you need to interact with HDA v1, please use client version 1.14, which is the last release compatible with that API.
 
-   While v2 is a complete overhaul of the previous version, the client interface is identical in both versions.
-   The most notable change is the query format, that has been greatly simplified.
-   The client, though, is still accepting the old format when possible, converting the query into the new one.
+   Note that HDA v1 was decommissioned in Q2 2024.
+
+   Although HDA v2 is a complete overhaul of the original API, the client interface remains unchanged. The primary difference is a significantly simplified query format.
+   When possible, the client will still accept queries written in the legacy format and automatically convert them into the new structure.
 
 Requirements
 ------------
 - Python 3
 - requests
 - tqdm
+- boto3 (Optional)
 
 Contribution
 ------------
@@ -45,5 +46,6 @@ Contents
    installation
    quickstart
    usage
+   s3
    api
    changelog
