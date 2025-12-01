@@ -30,7 +30,7 @@ def read(fname):
     return io.open(file_path, encoding="utf-8").read()
 
 
-version = "2.35"
+version = "2.36"
 
 
 setuptools.setup(
@@ -49,6 +49,9 @@ setuptools.setup(
         "requests>=2.5.0",
         "tqdm",
     ],
+    extras_require={
+        "s3": ["boto3>=1.17"],
+    },
     zip_safe=True,
     classifiers=[
         "Development Status :: 3 - Alpha",

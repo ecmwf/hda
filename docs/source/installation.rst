@@ -30,3 +30,9 @@ or
         conda install conda-forge::hda
 
 This will also install the required dependencies.
+
+If you want to be able to download products from WEkEO directly to an S3 bucket, install the optional dependecies as well:
+
+     .. code-block:: shell
+
+        pip install hda[s3]
