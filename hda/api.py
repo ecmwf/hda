@@ -378,11 +378,11 @@ class SearchResults:
                             outfile, size
                         )
                     )
-                if force:
-                    logger.debug("Downloading anyway because force keyword is set")
-                else:
-                    logger.debug("Skipping download, use force=True to download anyway")
-                    return
+                    if force:
+                        logger.debug("Downloading anyway because force keyword is set")
+                    else:
+                        logger.debug("Skipping download, use force=True to download anyway")
+                        return
 
         self.client.accept_tac(self.dataset)
 
