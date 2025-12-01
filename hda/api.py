@@ -1296,7 +1296,6 @@ class Client:
                 if content_size is None or total_downloaded >= content_size:
                     size = content_size  # Use the accurate size for final checks
                     break
-
             except ( requests.exceptions.RequestException, RuntimeError, DownloadSizeError ) as e:
                 logger.error("Download interrupted: %s" % (e,))
                 print("Download interrupted: %s" % (e,))
