@@ -1,7 +1,7 @@
 Changelog
 =========
 
-Version 2.37
+Version 2.38
 ------------
 * Added optional S3 support
 
