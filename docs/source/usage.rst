@@ -16,7 +16,7 @@ The most basic example would be something like the following:
 
     from hda import Client, Configuration
 
-    conf = Configuration(user=[a_username], password=[a_password])
+    confif = Configuration(user="a_username", password="a_password")
     client = Client(config=config)
 
 
