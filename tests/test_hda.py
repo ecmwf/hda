@@ -105,7 +105,8 @@ def test_hda_e2e():
     c = Client()
 
     r = {
-        "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
+#        "dataset_id": "EO:CLMS:DAT:CLMS_GLOBAL_DMP_1KM_V2_10DAILY_NETCDF",
+        "dataset_id": "EO:CLMS:DAT:CLMS_HRVPP_ST",
     }
 
     matches = c.search(r, limit=10)
