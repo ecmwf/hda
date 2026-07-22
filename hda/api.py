@@ -209,7 +209,7 @@ class Paginator:
         elif self.request_type == RequestType.POST:
             return self.request(query, self.action)
 
-    def run(self, *, query=None, limit=None, items_per_page=100):
+    def run(self, *, query=None, limit=None, items_per_page=ITEMS_PER_PAGE):
         if query is None:
             query = {}
 
@@ -222,18 +222,34 @@ class Paginator:
         yield from self.yield_result(page, limit)
 
         prop = page["properties"]
-        while prop["startIndex"] < prop["totalResults"]:
-            if self.returned >= prop["totalResults"]:
-                return
 
-            if limit is not None and self.returned > limit:
-                return
+        if "totalResults" not in prop:
+            # CDSE Adapter: the total counter is not available, we follow the
+            # next index to paginate through the results
+            while prop.get("nextIndex"):
+                if limit is not None and self.returned > limit:
+                    return
 
-            params["startIndex"] = prop["startIndex"] + items_per_page
-            query.update(params)
-            page = self.make_request(query)
-            prop = page["properties"]
-            yield from self.yield_result(page, limit)
+                params["startIndex"] = prop["nextIndex"]
+                query.update(params)
+                page = self.make_request(query)
+                prop = page["properties"]
+                print(f"{prop=}")
+                yield from self.yield_result(page, limit)
+        else:
+            # Use the regular pagination mechanism
+            while prop["startIndex"] < prop["totalResults"]:
+                if self.returned >= prop["totalResults"]:
+                    return
+
+                if limit is not None and self.returned > limit:
+                    return
+
+                params["startIndex"] = prop["startIndex"] + items_per_page
+                query.update(params)
+                page = self.make_request(query)
+                prop = page["properties"]
+                yield from self.yield_result(page, limit)
 
 
 class SearchPaginator(Paginator):
