@@ -28,3 +28,8 @@ API
 
 .. autoclass:: Client
    :members:
+
+.. automodule:: hda.api
+
+.. autoclass:: StacMixin
+   :members:

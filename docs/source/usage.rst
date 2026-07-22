@@ -32,7 +32,7 @@ Just by exporting environment variables, the user and the password can be set to
 
     from hda import Client, Configuration
 
-    conf = Configuration() # By default, values are retrived from the environment
+    config = Configuration() # By default, values are retrived from the environment
     client = Client(config=config)
 
 A last way of specifying the credentials is by providing the path for an alternative configuration file that has
@@ -42,7 +42,7 @@ the same *.hdarc* format:
 
     from hda import Client, Configuration
 
-    conf = Configuration(path="/custom/config")
+    config = Configuration(path="/custom/config")
     client = Client(config=config)
 
 While it is not recommended, nothing prohibit to mix those methods. In that case, the precedence rules are:
