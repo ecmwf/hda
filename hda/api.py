@@ -1073,6 +1073,16 @@ class Client:
         :param s3_verify_ssl: Whether to verify the SSL Certificate.
         :type s3_verify_ssl: bool
         """
+        s3_client = None
+        if to_s3:
+            s3_client = init_s3_client(
+                s3_bucket,
+                s3_endpoint,
+                s3_access_key_id,
+                s3_secret_access_key,
+                s3_verify_ssl,
+            )
+
         full_url = self.full_url(*[f"dataaccess/download/{download_id}"])
 
         response = self.session.head(full_url, verify=self.config.verify)
@@ -1096,13 +1106,6 @@ class Client:
             logger.debug("Headers: %s", response.headers)
 
             if to_s3:
-                s3_client = init_s3_client(
-                    s3_bucket,
-                    s3_endpoint,
-                    s3_access_key_id,
-                    s3_secret_access_key,
-                    s3_verify_ssl,
-                )
                 s3_key = os.path.join(s3_key_prefix, filename).lstrip("/")
                 total_downloaded = self._stream_to_s3(
                     response, s3_client, s3_bucket, s3_key, content_size
@@ -1131,8 +1134,6 @@ class Client:
             # This is not recovable, exit right away
             logger.error("Download interrupted: %s" % (e,))
             print("Download interrupted: %s" % (e,))
-        except Exception as e:
-            print(f"{type(e)} - {e}")
         finally:
             response.close()
 

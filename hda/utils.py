@@ -32,7 +32,7 @@ def build_quota_hit_message(response: requests.Response) -> str:
 
     msg = (
         f"{remaining} requests remaining out of {limit}. "
-        f"Please wait until {datetime.fromtimestamp(int(reset/1000))} "
+        f"Please wait until {datetime.fromtimestamp(int(reset)/1000)} "
         f"to submit a new request."
     )
     return msg

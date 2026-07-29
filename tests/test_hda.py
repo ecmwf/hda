@@ -110,7 +110,6 @@ def test_hda_e2e():
     }
 
     matches = c.search(r, limit=10)
-    print(matches)
     assert len(matches.results) == 10, matches
 
 
@@ -151,7 +150,7 @@ def test_download_s3_raises_importerror_when_missing_s3(monkeypatch, fresh_hda_a
     with pytest.raises(ImportError):
         client.stream(
             download_id="abc",
-            expected_size=100,
+            size=100,
             download_dir=".",
             to_s3=True,
             s3_bucket="my-bucket",
