@@ -1,7 +1,7 @@
 import math
 import re
 from typing import Iterator
-from urllib.parse import parse_qs, urlparse, quote
+from urllib.parse import parse_qs, quote, urlparse
 
 ISO_PATTERN = r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2})?Z"
 INTERVAL_PATTERN = rf"^{ISO_PATTERN}(?:/{ISO_PATTERN})?$"
@@ -31,7 +31,9 @@ class Page:
     @property
     def current_page(self) -> int:
         """Extracts the page number from the 'self' link."""
-        self_link = next((link["href"] for link in self._links if link["rel"] == "self"), "")
+        self_link = next(
+            (link["href"] for link in self._links if link["rel"] == "self"), ""
+        )
         query_params = parse_qs(urlparse(self_link).query)
         # Default to page 1 if the parameter isn't found
         return int(query_params.get("page", [1])[0])
@@ -74,14 +76,20 @@ class StacMixin:
         """Retrieves metadata for a specific collection."""
         return self._client.get("stac/collections/", collection_id)
 
-    def get_items_page(self, collection_id: str, limit: int = 20, page: int = 1) -> Page:
+    def get_items_page(
+        self, collection_id: str, limit: int = 20, page: int = 1
+    ) -> Page:
         """Iterates through items within a specific collection."""
-        response = self._client.get(f"stac/collections/{quote(collection_id)}/items?page={page}&limit={limit}")
+        response = self._client.get(
+            f"stac/collections/{quote(collection_id)}/items?page={page}&limit={limit}"
+        )
         return Page(response, self._client, "items")
 
     def get_item(self, collection_id: str, item_id: str) -> dict:
         """Retrieves a single item from a collection."""
-        return self._client.get(f"stac/collections/{quote(collection_id)}/items/{quote(item_id)}")
+        return self._client.get(
+            f"stac/collections/{quote(collection_id)}/items/{quote(item_id)}"
+        )
 
     def search(
         self,
@@ -94,9 +102,7 @@ class StacMixin:
         **kwargs,
     ) -> Iterator[dict]:
         """
-        Cross-collection search. Returns a generator that handles
-        pagination internally.
-
+        Cross-collection search.
         """
         payload = {}
         keys = {
@@ -105,10 +111,9 @@ class StacMixin:
             "bbox": bbox,
             "datetime": interval,
             "limit": limit,
-            "token": self._client.token,
         }
-        # if not validate_interval(interval):
-        #     raise ValueError("Bad interval format")
+        if not validate_interval(interval):
+            raise ValueError("Bad interval format")
 
         for key, param in keys.items():
             if param:

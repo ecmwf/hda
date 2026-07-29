@@ -151,7 +151,7 @@ def test_download_s3_raises_importerror_when_missing_s3(monkeypatch, fresh_hda_a
     with pytest.raises(ImportError):
         client.stream(
             download_id="abc",
-            size=100,
+            expected_size=100,
             download_dir=".",
             to_s3=True,
             s3_bucket="my-bucket",

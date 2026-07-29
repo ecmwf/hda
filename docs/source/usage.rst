@@ -52,6 +52,8 @@ While it is not recommended, nothing prohibit to mix those methods. In that case
 3. The custom configuration file if no environment is set
 4. Finally, the *$HOME/.hdarc* file, which is the default one
 
+Please note that, since version 3.40, the usage of the API is no longer limited to WEkEO users. EUMETSAT and CMEMS credentials are equally accepted.
+
 Advanced client usage
 ---------------------
 
@@ -89,7 +91,16 @@ Depending on the number of downloads, this can speed up the process, especially 
 
 This number can be easily changed by specifying a different `max_workers` value for the :class:`hda.api.Client` class.
 
-Keep in mind though the following:
+Keep in mind that each WEkEO account has usage quotas. While the numbers are pretty high, it is not recommended to hammer the API for just a small potential speed gain.
 
-1. As a general rule of thumb, the number of threads should be equal to the number of CPU core
-2. Each WEkEO account has usage quotas. While the numbers are pretty high, it is not recommended to hammer the API for just a small potential speed gain
+STAC catalogue
+~~~~~~~~~~~~~~
+
+Besides the search and download endpoints, a whole STAC compatible branch of API is available:
+
+.. code-block:: python
+
+    c = Client()
+    c.stac.get_info()
+
+Please refer to the :doc:`api </api>` section for a description of the provided methods.

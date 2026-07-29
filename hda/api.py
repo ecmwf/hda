@@ -26,7 +26,7 @@ import os
 import time
 from enum import Enum
 from itertools import cycle
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 from urllib.parse import urljoin
 
 try:
@@ -42,8 +42,8 @@ except ImportError:
 import requests
 from tqdm import tqdm
 
-from hda.utils import build_quota_hit_message, bytes_to_string, convert
 from hda.stac import StacMixin
+from hda.utils import build_quota_hit_message, bytes_to_string, convert
 
 BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
 ITEMS_PER_PAGE = 100
@@ -234,7 +234,6 @@ class Paginator:
                 query.update(params)
                 page = self.make_request(query)
                 prop = page["properties"]
-                print(f"{prop=}")
                 yield from self.yield_result(page, limit)
         else:
             # Use the regular pagination mechanism
@@ -632,15 +631,29 @@ class Client:
         """
 
         def get_new_token():
-            data = {
+            # The gettoken endpoint changed on July 2026
+            url = urljoin(self.config.url, "gettoken").replace("hda-broker", "identity")
+
+            base_payload = {
                 "username": self.config.user,
                 "password": self.config.password,
             }
-            return requests.post(
-                urljoin(self.config.url, "gettoken"),
-                json=data,
-                verify=self.config.verify,
-            )
+
+            # WEkEO authentication includes multiple federated accounts
+            origins = [None, "eumetsat", "cmems"]
+
+            for origin in origins:
+                payload = {**base_payload, "origin": origin} if origin else base_payload
+                response = requests.post(
+                    url,
+                    json=payload,
+                    verify=self.config.verify,
+                )
+
+                if response.status_code == 200:
+                    return response
+
+            response.raise_for_status()
 
         def refresh_token():
             return requests.post(
@@ -1026,7 +1039,7 @@ class Client:
     def stream(
         self,
         download_id: str,
-        expected_size: int,
+        size: int,
         download_dir: str = ".",
         *,
         to_s3: bool = False,
@@ -1066,7 +1079,7 @@ class Client:
         response.raise_for_status()
 
         filename = get_filename(response, download_id)
-        expected_size = get_content_size(response, expected_size)
+        content_size = get_content_size(response, size)
 
         start_time = time.time()
         total_downloaded = 0
@@ -1092,21 +1105,21 @@ class Client:
                 )
                 s3_key = os.path.join(s3_key_prefix, filename).lstrip("/")
                 total_downloaded = self._stream_to_s3(
-                    response, s3_client, s3_bucket, s3_key, expected_size
+                    response, s3_client, s3_bucket, s3_key, content_size
                 )
             else:
                 download_dir = os.path.expanduser(download_dir)
                 os.makedirs(download_dir, exist_ok=True)
                 outfile = os.path.join(download_dir, filename)
                 total_downloaded = self._stream_to_local_file(
-                    response, outfile, expected_size
+                    response, outfile, content_size
                 )
 
-            logger.info(f"Downloading {full_url} ({bytes_to_string(expected_size)})")
-            print(f"Downloading {full_url} ({bytes_to_string(expected_size)})")
+            logger.info(f"Downloading {full_url} ({bytes_to_string(content_size)})")
+            print(f"Downloading {full_url} ({bytes_to_string(content_size)})")
 
-            if expected_size is None or total_downloaded >= expected_size:
-                size = expected_size  # Use the accurate size for final checks
+            if content_size is None or total_downloaded >= content_size:
+                size = content_size  # Use the accurate size for final checks
 
         except (
             RuntimeError,
@@ -1123,9 +1136,9 @@ class Client:
         finally:
             response.close()
 
-        self._finalize_download(total_downloaded, size, start_time)
+        self._finalize_download(total_downloaded, content_size, start_time)
 
-        if total_downloaded < size:
+        if total_downloaded < content_size:
             # Final check failure, should only happen if retry_max was hit
             raise DownloadSizeError(
                 f"Download failed: {total_downloaded} byte(s) out of {size} (missing {size - total_downloaded})"

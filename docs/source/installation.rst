@@ -4,9 +4,8 @@ Installation
 Get your credentials
 --------------------
 
-1. If you don't have a WEkEO account, please self register through the WEkEO `registration form <https://www.wekeo.eu/>`_, then proceed to the step below.
-
-2. Copy the code below in the file `$HOME/.hdarc` in your Unix/Linux environment. Adapt the following template with the credentials of your WEkEO account:
+1. If you don't have a WEkEO account, please self register through the WEkEO `registration form <https://data.wekeo.copernicus.eu/register/>`_, then proceed to the step below. Alternatively, you can use your EUMETSAT or CMEMS credentials.
+2. Copy the code below in the file `$HOME/.hdarc` in your Unix/Linux environment. Adapt the following template with your credentials:
 
     .. code-block:: ini
 
