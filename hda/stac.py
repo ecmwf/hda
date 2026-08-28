@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import math
 import re
-from typing import Iterator
+from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
 
 ISO_PATTERN = r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2})?Z"
@@ -9,8 +11,11 @@ INTERVAL_PATTERN = rf"^{ISO_PATTERN}(?:/{ISO_PATTERN})?$"
 INTERVAL_REGEX = re.compile(INTERVAL_PATTERN)
 
 
-def validate_interval(interval: str) -> bool:
-    return bool(INTERVAL_REGEX.match(interval))
+def validate_interval(interval: str | None) -> bool:
+    if interval is not None:
+        return bool(INTERVAL_REGEX.match(interval))
+
+    return True
 
 
 class Page:
@@ -31,9 +36,7 @@ class Page:
     @property
     def current_page(self) -> int:
         """Extracts the page number from the 'self' link."""
-        self_link = next(
-            (link["href"] for link in self._links if link["rel"] == "self"), ""
-        )
+        self_link = next((link["href"] for link in self._links if link["rel"] == "self"), "")
         query_params = parse_qs(urlparse(self_link).query)
         # Default to page 1 if the parameter isn't found
         return int(query_params.get("page", [1])[0])
@@ -74,37 +77,30 @@ class StacMixin:
 
     def get_collection(self, collection_id: str) -> dict:
         """Retrieves metadata for a specific collection."""
-        return self._client.get("stac/collections/", collection_id)
+        return self._client.get(f"stac/collections/{quote(collection_id)}")
 
-    def get_items_page(
-        self, collection_id: str, limit: int = 20, page: int = 1
-    ) -> Page:
+    def get_items_page(self, collection_id: str, limit: int = 20, page: int = 1) -> Page:
         """Iterates through items within a specific collection."""
-        response = self._client.get(
-            f"stac/collections/{quote(collection_id)}/items?page={page}&limit={limit}"
-        )
+        response = self._client.get(f"stac/collections/{quote(collection_id)}/items?page={page}&limit={limit}")
         return Page(response, self._client, "items")
 
     def get_item(self, collection_id: str, item_id: str) -> dict:
         """Retrieves a single item from a collection."""
-        return self._client.get(
-            f"stac/collections/{quote(collection_id)}/items/{quote(item_id)}"
-        )
+        return self._client.get(f"stac/collections/{quote(collection_id)}/items/{quote(item_id)}")
 
     def search(
         self,
         *,
-        collections: list[str] = None,
-        ids: list[str] = None,
-        bbox: tuple[float, float, float, float] = None,
-        interval: str = None,
+        collections: list[str] = [],
+        ids: list[str] = [],
+        bbox: tuple[float, float, float, float] | None = None,
+        interval: str | None = None,
         limit: int = 1,
         **kwargs,
-    ) -> Iterator[dict]:
+    ) -> Any:
         """
         Cross-collection search.
         """
-        payload = {}
         keys = {
             "collections": collections,
             "ids": ids,
@@ -115,6 +111,7 @@ class StacMixin:
         if not validate_interval(interval):
             raise ValueError("Bad interval format")
 
+        payload = {}
         for key, param in keys.items():
             if param:
                 payload[key] = param
