@@ -9,8 +9,8 @@ Get your credentials
 
     .. code-block:: ini
 
-        user: [username]
-        password: [password]
+        user: username
+        password: password
 
 Install the WEkEO HDA client
 ----------------------------
