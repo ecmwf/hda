@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 
@@ -19,6 +21,19 @@ def bytes_to_string(n: int) -> str:
         n /= 1024.0
         i += 1
     return "%g%s" % (int(n * 10 + 0.5) / 10.0, u[i])
+
+
+def build_quota_warn_message(response: requests.Response, threshold: float = 0.8) -> str | None:
+    limit = response.headers.get("X-Quota-Limit")
+    remaining = response.headers.get("X-Quota-Remaining")
+    try:
+        limit, remaining = int(limit), int(remaining)
+        if remaining / limit > threshold:
+            return f"Warning: {remaining} requests remaining out of {limit}."
+    except (TypeError, ValueError):
+        pass
+
+    return None
 
 
 def build_quota_hit_message(response: requests.Response) -> str:
