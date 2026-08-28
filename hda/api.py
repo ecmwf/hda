@@ -43,7 +43,7 @@ import requests
 from tqdm import tqdm
 
 from hda.stac import StacMixin
-from hda.utils import build_quota_hit_message, bytes_to_string, convert
+from hda.utils import build_quota_hit_message, build_quota_warn_message, bytes_to_string, convert
 
 BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
 ITEMS_PER_PAGE = 100
@@ -460,9 +460,9 @@ class SearchResults:
                     logger.info(f"Successfully downloaded: {result}")
                 except Exception as exc:
                     print(
-                        f"Download task failed: {exc}, {type(exc)}, {future.__dict__}"
+                        f"Download task failed: {exc}, {type(exc)}"
                     )
-                    logger.error(f"Download task failed: {exc}")
+                    logger.exception("Download task failed")
 
 
 class Configuration:
@@ -728,6 +728,10 @@ class Client:
                         requests.codes.request_timeout,
                         requests.codes.forbidden,
                     ]:
+                        msg = build_quota_warn_message(r, 0.0)
+                        if msg is not None:
+                            logger.warning(msg)
+                            print(msg)
                         return r
 
                     if r.status_code == requests.codes.forbidden:
@@ -1085,11 +1089,11 @@ class Client:
 
         full_url = self.full_url(*[f"dataaccess/download/{download_id}"])
 
-        response = self.session.head(full_url, verify=self.config.verify)
-        response.raise_for_status()
+        product_info = self.session.head(full_url, verify=self.config.verify, timeout=5)
+        product_info.raise_for_status()
 
-        filename = get_filename(response, download_id)
-        content_size = get_content_size(response, size)
+        filename = get_filename(product_info, download_id)
+        content_size = get_content_size(product_info, size)
 
         start_time = time.time()
         total_downloaded = 0
@@ -1127,13 +1131,13 @@ class Client:
         except (
             RuntimeError,
             DownloadSizeError,
-        ) as e:
-            logger.error("Download interrupted: %s" % (e,))
-            print("Download interrupted: %s" % (e,))
-        except S3InitializeError as e:
+        ) as exc:
+            logger.exception("Download interrupted")
+            print(f"Download interrupted: {exc}")
+        except S3InitializeError as exc:
             # This is not recovable, exit right away
-            logger.error("Download interrupted: %s" % (e,))
-            print("Download interrupted: %s" % (e,))
+            logger.exception("Download interrupted")
+            print(f"Download interrupted: {exc}")
         finally:
             response.close()
 
