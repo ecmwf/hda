@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import time
+import warnings
 from enum import Enum
 from itertools import cycle
 from typing import Any, Optional
@@ -43,7 +44,12 @@ import requests
 from tqdm import tqdm
 
 from hda.stac import StacMixin
-from hda.utils import build_quota_hit_message, build_quota_warn_message, bytes_to_string, convert
+from hda.utils import (
+    build_quota_hit_message,
+    build_quota_warn_message,
+    bytes_to_string,
+    convert,
+)
 
 BROKER_URL = "https://gateway.prod.wekeo2.eu/hda-broker/"
 ITEMS_PER_PAGE = 100
@@ -118,7 +124,7 @@ def init_s3_client(
     """
     if not _HAS_S3:
         raise ImportError(
-            "S3 support requires optional dependency: pip install hda[s3]"
+            "S3 support requires optional dependency: pip install hda[s3]",
         )
     if not s3_bucket:
         raise ValueError("s3_bucket must be provided when to_s3=True")
@@ -145,7 +151,11 @@ def init_s3_client(
 
 
 def complete_s3_upload(
-    s3_client: Any, s3_bucket: str, s3_key: str, upload_id: str, parts: list
+    s3_client: Any,
+    s3_bucket: str,
+    s3_key: str,
+    upload_id: str,
+    parts: list,
 ) -> None:
     """Finalizes the MultiPart Upload."""
     try:
@@ -155,11 +165,13 @@ def complete_s3_upload(
             UploadId=upload_id,
             MultipartUpload={"Parts": parts},
         )
-        logger.info(f"S3 MultiPart Upload for {s3_key} completed.")
+        logger.info("S3 MultiPart Upload for %s completed.", s3_key)
     except Exception as e:
         logger.error(f"Failed to complete S3 MultiPart Upload for {s3_key}. Aborting.")
         s3_client.abort_multipart_upload(
-            Bucket=s3_bucket, Key=s3_key, UploadId=upload_id
+            Bucket=s3_bucket,
+            Key=s3_key,
+            UploadId=upload_id,
         )
         raise RuntimeError(f"S3 MultiPart Upload completion failed: {e}")
 
@@ -359,7 +371,9 @@ class SearchResults:
                 index = slice(index, None, None)
 
         instance = self.__class__(
-            client=self.client, results=self.results[index], dataset=self.dataset
+            client=self.client,
+            results=self.results[index],
+            dataset=self.dataset,
         )
         return instance
 
@@ -437,7 +451,7 @@ class SearchResults:
         """
         tasks = []
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.client.max_workers
+            max_workers=self.client.max_workers,
         ) as executor:
             for result in self.results:
                 future = executor.submit(
@@ -458,10 +472,7 @@ class SearchResults:
                 try:
                     result = future.result()
                     logger.info(f"Successfully downloaded: {result}")
-                except Exception as exc:
-                    print(
-                        f"Download task failed: {exc}, {type(exc)}"
-                    )
+                except Exception:
                     logger.exception("Download task failed")
 
 
@@ -563,20 +574,6 @@ class Client:
         self._refresh_token = None
         self._token_expiration = None
         self._tqdm_position = cycle(range(self.max_workers))
-
-        logger.debug(
-            "HDA %s",
-            dict(
-                url=self.config.url,
-                user=self.config.user,
-                password=self.config.password,
-                verify=self.config.verify,
-                timeout=self.timeout,
-                sleep_max=self.sleep_max,
-                retry_max=self.retry_max,
-                progress=self.progress,
-            ),
-        )
 
     def full_url(self, *args):
         """Returns the full URL of the API by appending the `args` to
@@ -730,8 +727,7 @@ class Client:
                     ]:
                         msg = build_quota_warn_message(r, 0.0)
                         if msg is not None:
-                            logger.warning(msg)
-                            print(msg)
+                            warnings.warn(msg)
                         return r
 
                     if r.status_code == requests.codes.forbidden:
@@ -832,7 +828,10 @@ class Client:
         logger.debug("===> GET %s", full)
 
         r = self.robust(self.session.get)(
-            full, params=kwargs, verify=self.config.verify, timeout=self.timeout
+            full,
+            params=kwargs,
+            verify=self.config.verify,
+            timeout=self.timeout,
         )
         r.raise_for_status()
         result = r.json()
@@ -851,7 +850,9 @@ class Client:
         logger.debug("===> HEAD %s", full)
 
         r = self.robust(self.session.head)(
-            full, verify=self.config.verify, timeout=self.timeout
+            full,
+            verify=self.config.verify,
+            timeout=self.timeout,
         )
         r.raise_for_status()
         logger.debug("<=== %s", r)
@@ -872,7 +873,10 @@ class Client:
         logger.debug("===> POST %s", full)
         logger.debug("===> POST %s", shorten(message))
         res = self.robust(self.session.post)(
-            full, json=message, verify=self.config.verify, timeout=self.timeout
+            full,
+            json=message,
+            verify=self.config.verify,
+            timeout=self.timeout,
         )
         res.raise_for_status()
         result = res.json()
@@ -895,7 +899,10 @@ class Client:
         logger.debug("===> PUT %s", shorten(message))
 
         r = self.robust(self.session.put)(
-            full, json=message, verify=self.config.verify, timeout=self.timeout
+            full,
+            json=message,
+            verify=self.config.verify,
+            timeout=self.timeout,
         )
         r.raise_for_status()
         return r
@@ -988,7 +995,7 @@ class Client:
                                 {
                                     "PartNumber": part_number,
                                     "ETag": upload_response["ETag"],
-                                }
+                                },
                             )
 
                             current_part_buffer = io.BytesIO()
@@ -1005,33 +1012,42 @@ class Client:
                         Body=part_data,
                     )
                     parts_uploaded.append(
-                        {"PartNumber": part_number, "ETag": upload_response["ETag"]}
+                        {"PartNumber": part_number, "ETag": upload_response["ETag"]},
                     )
 
                 # Call complete
                 complete_s3_upload(
-                    s3_client, s3_bucket, s3_key, upload_id, parts_uploaded
+                    s3_client,
+                    s3_bucket,
+                    s3_key,
+                    upload_id,
+                    parts_uploaded,
                 )
 
             except Exception as e:
                 # Abort on any failure to prevent orphaned parts
                 logger.error(f"Error during S3 stream. Aborting MPU: {upload_id}")
                 s3_client.abort_multipart_upload(
-                    Bucket=s3_bucket, Key=s3_key, UploadId=upload_id
+                    Bucket=s3_bucket,
+                    Key=s3_key,
+                    UploadId=upload_id,
                 )
                 raise RuntimeError(f"S3 stream failed: {e}")
 
         return downloaded_in_session
 
     def _finalize_download(
-        self, total_downloaded: int, content_size: Optional[int], start_time: float
+        self,
+        total_downloaded: int,
+        content_size: Optional[int],
+        start_time: float,
     ) -> None:
         """Performs final size checks and logs the download rate."""
         content_size = 0 if content_size is None else content_size
         if total_downloaded > content_size:
             logger.warning(
                 "Oops, downloaded %s byte(s), was supposed to be %s (extra %s)"
-                % (total_downloaded, content_size, total_downloaded - content_size)
+                % (total_downloaded, content_size, total_downloaded - content_size),
             )
 
         elapsed = time.time() - start_time
@@ -1112,18 +1128,23 @@ class Client:
             if to_s3:
                 s3_key = os.path.join(s3_key_prefix, filename).lstrip("/")
                 total_downloaded = self._stream_to_s3(
-                    response, s3_client, s3_bucket, s3_key, content_size
+                    response,
+                    s3_client,
+                    s3_bucket,
+                    s3_key,
+                    content_size,
                 )
             else:
                 download_dir = os.path.expanduser(download_dir)
                 os.makedirs(download_dir, exist_ok=True)
                 outfile = os.path.join(download_dir, filename)
                 total_downloaded = self._stream_to_local_file(
-                    response, outfile, content_size
+                    response,
+                    outfile,
+                    content_size,
                 )
 
-            logger.info(f"Downloading {full_url} ({bytes_to_string(content_size)})")
-            print(f"Downloading {full_url} ({bytes_to_string(content_size)})")
+            tqdm.write(f"Downloading {full_url} ({bytes_to_string(content_size)})")
 
             if content_size is None or total_downloaded >= content_size:
                 size = content_size  # Use the accurate size for final checks
@@ -1131,13 +1152,9 @@ class Client:
         except (
             RuntimeError,
             DownloadSizeError,
-        ) as exc:
+            S3InitializeError,
+        ):
             logger.exception("Download interrupted")
-            print(f"Download interrupted: {exc}")
-        except S3InitializeError as exc:
-            # This is not recovable, exit right away
-            logger.exception("Download interrupted")
-            print(f"Download interrupted: {exc}")
         finally:
             response.close()
 
@@ -1146,7 +1163,7 @@ class Client:
         if total_downloaded < content_size:
             # Final check failure, should only happen if retry_max was hit
             raise DownloadSizeError(
-                f"Download failed: {total_downloaded} byte(s) out of {size} (missing {size - total_downloaded})"
+                f"Download failed: {total_downloaded} byte(s) out of {size} (missing {size - total_downloaded})",
             )
 
         if to_s3:
