@@ -19,7 +19,7 @@ def validate_interval(interval: str | None) -> bool:
 
 
 class Page:
-    def __init__(self, response, client, items_key, limit = 20):
+    def __init__(self, response, client, items_key, limit=20):
         self.items = response.get(items_key, [])
         self.total_available = response.get("numberMatched")
         self.number_returned = response.get("numberReturned")
