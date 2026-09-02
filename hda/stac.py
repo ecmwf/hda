@@ -19,13 +19,14 @@ def validate_interval(interval: str | None) -> bool:
 
 
 class Page:
-    def __init__(self, response, client, items_key):
+    def __init__(self, response, client, items_key, limit = 20):
         self.items = response.get(items_key, [])
         self.total_available = response.get("numberMatched")
         self.number_returned = response.get("numberReturned")
         self._links = response.get("links", [])
         self._client = client
         self._items_key = items_key
+        self._limit = limit
 
     def __str__(self) -> str:
         return f"Page {self.current_page} of {self.total_pages}, {self.number_returned} items"
@@ -43,10 +44,10 @@ class Page:
 
     @property
     def total_pages(self) -> int:
-        """Calculates total pages based on the fixed limit of 20."""
+        """Calculates total pages based. The default backend limit is 20."""
         if self.total_available == 0 or self.total_available is None:
             return 0
-        return math.ceil(self.total_available / 20)
+        return math.ceil(self.total_available / self._limit)
 
     @property
     def has_next(self) -> bool:
@@ -82,7 +83,7 @@ class StacMixin:
     def get_items_page(self, collection_id: str, limit: int = 20, page: int = 1) -> Page:
         """Iterates through items within a specific collection."""
         response = self._client.get(f"stac/collections/{quote(collection_id)}/items?page={page}&limit={limit}")
-        return Page(response, self._client, "items")
+        return Page(response, self._client, "items", limit)
 
     def get_item(self, collection_id: str, item_id: str) -> dict:
         """Retrieves a single item from a collection."""
@@ -91,8 +92,8 @@ class StacMixin:
     def search(
         self,
         *,
-        collections: list[str] = [],
-        ids: list[str] = [],
+        collections: list[str] | None = None,
+        ids: list[str] | None = None,
         bbox: tuple[float, float, float, float] | None = None,
         interval: str | None = None,
         limit: int = 1,
@@ -113,7 +114,8 @@ class StacMixin:
 
         payload = {}
         for key, param in keys.items():
-            if param:
+            if param is not None:
                 payload[key] = param
 
+        payload.update(kwargs)
         return self._client.post(payload, "stac/search")
