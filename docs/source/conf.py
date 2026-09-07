@@ -12,11 +12,11 @@ sys.path.insert(0, os.path.abspath("../.."))
 # -- Project information
 
 project = "WEkEO HDA API Client"
-copyright = "2025, ECMWF"
+copyright = "2026, ECMWF"
 author = "ECMWF"
 
-release = "2.30"
-version = "2.30"
+release = "2.40"
+version = "2.40"
 
 # -- General configuration
 

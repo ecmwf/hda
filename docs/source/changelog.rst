@@ -1,6 +1,12 @@
 Changelog
 =========
 
+Version 2.40
+------------
+* Added support for STAC endpoints
+* Added federated authentication
+* Updated authentication endpoint
+
 Version 2.38
 ------------
 * Added optional S3 support

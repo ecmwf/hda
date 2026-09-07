@@ -28,3 +28,6 @@ API
 
 .. autoclass:: Client
    :members:
+
+.. autoclass:: StacMixin
+   :members:
