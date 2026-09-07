@@ -661,6 +661,7 @@ class Client:
         else:
             r = get_new_token()
 
+        r.raise_for_status()
         return r.json()
 
     def accept_tac(self, dataset_id):
