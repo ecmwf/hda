@@ -22,16 +22,27 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from hda import Client, Configuration
 from hda.api import S3InitializeError, SearchResults
 
-NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and (
-    "HDA_USER" not in os.environ or "HDA_PASSWORD" not in os.environ
-)
+
+def _credentials_available():
+    return bool(os.environ.get("HDA_USER") and os.environ.get("HDA_PASSWORD"))
+
+
+NO_HDARC = not os.path.exists(os.path.expanduser("~/.hdarc")) and not _credentials_available()
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 CUSTOM_HDRRC = os.path.join(BASE_DIR, "tests/custom_config.txt")
+
+
+def test_empty_hda_credentials_are_unavailable(monkeypatch):
+    monkeypatch.setenv("HDA_USER", "")
+    monkeypatch.setenv("HDA_PASSWORD", "")
+
+    assert _credentials_available() is False
 
 
 @pytest.fixture
@@ -109,7 +120,13 @@ def test_hda_e2e():
         "dataset_id": "EO:EUM:DAT:SENTINEL-3:OL_1_EFR___",
     }
 
-    matches = c.search(r, limit=10)
+    try:
+        matches = c.search(r, limit=10)
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code >= 500:
+            pytest.skip(f"HDA service unavailable: {e}")
+        raise
+    print(matches)
     assert len(matches.results) == 10, matches
 
 
